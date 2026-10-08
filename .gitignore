@@ -10,3 +10,5 @@ logs/
 web/node_modules/
 web/dist/
 .env
+ws/
+.rlm_workspace/
