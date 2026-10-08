@@ -1,5 +1,10 @@
 # Spike 3 — Jev 1.13 as the trader's fast "System One" (2026-10-08)
 
+> **Superseded in part by .** The "contradictions" below are by
+> design (TypeSafe: every answer is independent), and "nothing to say about
+> price" holds only at the 30-minute next-bar scale -- at the 2-hour 风口 scale
+> Jev has real signal.
+
 **Question:** can Jev (`typesafe/jev-1.13`, TypeSafe's typed-decision model on
 OpenRouter) make the RLM trader stronger — as the watcher's judgement, or as a
 cheap bulk labeller the RLM computes over? Script: `spikes/03-jev/`.
