@@ -1,6 +1,6 @@
 # Spike 3 — Jev 1.13 as the trader's fast "System One" (2026-10-08)
 
-> **Superseded in part by .** The "contradictions" below are by
+> **Superseded in part by `03b-jev-wind.md`.** The "contradictions" below are by
 > design (TypeSafe: every answer is independent), and "nothing to say about
 > price" holds only at the 30-minute next-bar scale -- at the 2-hour 风口 scale
 > Jev has real signal.
