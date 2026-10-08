@@ -7,7 +7,8 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",   # [standard] brings the websockets implementation
     "httpx>=0.27",               # agents talk to the office server over HTTP
-    "openai>=1.50",              # OpenAI-compatible client for OpenRouter (manager)
+    "langchain>=1.4,<2",         # manager agent (create_agent)
+    "langchain-openai>=1.7,<2",  # OpenAI-compatible chat model, pointed at OpenRouter
     "rlms==0.1.3",               # Recursive Language Models (trader); 0.x, so pinned exactly
 ]
 

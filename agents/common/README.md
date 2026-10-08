@@ -4,7 +4,7 @@
 
 | file | owns |
 |---|---|
-| `office_client.py` | HTTP calls to the server + a WS subscription to the event stream |
+| `office_client.py` | HTTP calls to the server + an SSE subscription to the event stream |
 | `llm.py` | OpenRouter (OpenAI-compatible) client; writes a `spend` event per call and refuses when the role's daily budget is spent |
 
 ## Does not own

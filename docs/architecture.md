@@ -19,20 +19,40 @@ repo (`eye-of-god-on-traderme-agent-world`, `todo/pixel-office.md`).
    backstop. Both legs pay 4bps.
 7. **v0 trades BTC/USD only.**
 
+## Tech stack (decided 2026-10-08)
+
+| layer | choice | why |
+|---|---|---|
+| trader | Python 3.11 + `rlms` (Recursive Language Models) | RLM exists only in Python; it *is* the trader's agent loop, so no framework on top |
+| manager | Python + **LangChain 1.x** (`create_agent`), OpenAI-compatible chat model pointed at OpenRouter | the user wants to learn the common framework, and its eval ecosystem (`openevals`) is the reason a manager needs a framework at all |
+| multi-agent orchestration | **none** — the server's event stream | orchestration frameworks decide who speaks next and run a task to completion; this office is a persistent world where agents wake on their own |
+| server | Python + FastAPI | same language as the agents; `settlement.py` / `market.py` and their tests carry over unchanged |
+| database | SQLite, WAL | one writer, little data, no operations |
+| realtime | **SSE** server → clients; every write is an HTTP POST | only the server pushes, so WebSocket's two-way channel buys nothing |
+| frontend | Vite + TypeScript + **Phaser 4**, chat and leaderboard as plain DOM over the canvas | text, input and scrolling are what HTML is for; the canvas draws the room |
+| art | **Kenney** packs (CC0) | free, consistent, no licence questions |
+| models | OpenRouter for both roles, chosen by **measurement** in spike 2 | an RLM root model must write working REPL code; a flash model may not |
+| Python tooling | uv, ruff, pytest | |
+| run | systemd user units on the server, reached over Tailscale | as agent-world |
+
+Reference read, not adopted: a16z AI Town (MIT) for how characters move and how
+conversation is shown — its Convex/TypeScript backend cannot host a Python RLM
+and its chats are 1:1 by proximity, not one public room.
+
 ## The one principle: the server is the world, everyone else is a client
 
 ```
                      ┌──────────────── office server ────────────────┐
- browser (pixels) ◄─WS┤ FastAPI · SQLite · sole writer                  │
+ browser (pixels) ◄SSE┤ FastAPI · SQLite · sole writer                  │
  boss's chat ─HTTP───►│ events: say open close settle agent_state       │
                      │         command fire spend                       │
                      │ positions · settlement · leaderboard · budget    │
                      └────────▲──────────────────────────▲─────────────┘
-                         HTTP + WS                   HTTP + WS
+                         HTTP + SSE                  HTTP + SSE
              ┌───────────────┴─────────┐   ┌───────────┴────────────┐
              │ trader runner            │   │ manager runner          │
              │  watcher (code, always)  │   │  strong model,          │
-             │   └─ wakes ─► RLM        │   │  plain tool loop        │
+             │   └─ wakes ─► RLM        │   │  LangChain agent        │
              │  DockerREPL persistent   │   └────────────────────────┘
              └──────────────────────────┘              │
                    │ cheap model                        │ strong model
@@ -75,7 +95,7 @@ else stores them.
 
 | method | path | who |
 |---|---|---|
-| GET | `/events?since=<id>` and WS `/stream` | everyone |
+| GET | `/events?since=<id>` and SSE `/stream` | everyone |
 | POST | `/say` | everyone |
 | GET | `/price` | everyone |
 | POST | `/positions/open`, `/positions/{id}/close` | traders, for themselves only |

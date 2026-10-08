@@ -1,7 +1,8 @@
 # agents/manager/ — the manager
 
-A strong model in a plain tool loop — no RLM, it does not need to compute over
-large data. It has **full authority over the trader** and answers to the boss.
+A strong model in a **LangChain 1.x** agent (`create_agent`) — no RLM, it does
+not need to compute over large data. LangChain was chosen so its behaviour can be
+evaluated (`openevals`), and because the user wants to learn the framework. It has **full authority over the trader** and answers to the boss.
 
 ## Planned files
 

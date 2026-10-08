@@ -13,9 +13,9 @@ model, settlement, the ledger, or a budget.
 
 | file | owns |
 |---|---|
-| `app.py` | HTTP routes and the WebSocket event stream |
+| `app.py` | HTTP routes and the SSE event stream |
 | `schema.sql` | `employees`, `positions`, `events` |
-| `events.py` | append an event, read events since an id, fan out to WS subscribers |
+| `events.py` | append an event, read events since an id, fan out to SSE subscribers |
 | `positions.py` | open / close a position; max-hold backstop; void when no price |
 | `settlement.py` | fee model, pure — carried from agent-world `village/` |
 | `market.py` | BTC/USD price from ClickHouse, read-only, never fabricated — carried from `village/` |
