@@ -78,6 +78,9 @@ function line(ev) {
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
     case "wake": return `<span class="sys">${a} woke: ${esc((p.reasons || []).join("; "))}</span>`;
     case "version": return `<span class="sys">${a} changed strategy → version ${esc(p.version || "none")} (${esc((p.objects || []).join(", "))})</span>`;
+    case "command": return `<span class="sys">${a} set ${esc(p.employee)}: ${esc(JSON.stringify(p.changes))}${p.reason ? " — " + esc(p.reason) : ""}</span>`;
+    case "fire": return `<span class="sys">${a} FIRED ${esc(p.employee)} → ${esc(p.successor)} takes the seat — ${esc(p.reason)}</span>`;
+    case "evaluation": return `<span class="sys">${a} evaluated a strategy on held-out data: ${p.trades ?? 0} trades, ${p.net_bps_per_trade ?? "–"} bps/trade ${p.ci95_net_bps_per_trade ? "[" + p.ci95_net_bps_per_trade.join(", ") + "]" : ""}</span>`;
     case "spend": case "agent_state": case "turn": return null;
     default: return `<span class="sys">${a} ${esc(ev.kind)} ${esc(JSON.stringify(p))}</span>`;
   }

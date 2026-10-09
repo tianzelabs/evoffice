@@ -22,7 +22,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import leaderboard, positions
+from . import leaderboard, positions, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
@@ -45,6 +45,17 @@ class Report(BaseModel):
     payload: dict
 
 
+class Params(BaseModel):
+    heartbeat_min: int | None = None
+    max_size: float | None = None
+    max_hold_min: int | None = None
+    reason: str = ""
+
+
+class Fire(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class Evaluate(BaseModel):
     code: str
 
@@ -58,7 +69,7 @@ class Open(BaseModel):
 
 
 def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: float = 10.0,
-               gateway: Gateway | None = None, eval_runner=None) -> FastAPI:
+               gateway: Gateway | None = None, eval_runner=None, tokens_path: Path | None = None) -> FastAPI:
     eval_runner = eval_runner or evaluation.docker_runner
     gateway = gateway or Gateway(store)
     for who in tokens.values():
@@ -166,6 +177,27 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             raise HTTPException(413, "payload too large")
         return store.emit(w["id"], body.kind, body.payload)
 
+    @app.get("/employees")
+    def employees():
+        rows = store.q("SELECT * FROM employees ORDER BY hired_ts")
+        for r in rows:
+            r["params"] = json.loads(r["params"])
+        return rows
+
+    @app.post("/employees/{employee_id}/params")
+    def params(employee_id: str, body: Params, w: dict = Depends(who)):
+        try:
+            return staff.set_params(store, w, employee_id, body.model_dump(exclude={"reason"}), body.reason)
+        except staff.StaffRefused as e:
+            raise HTTPException(409, str(e))
+
+    @app.post("/employees/{employee_id}/fire")
+    async def fire(employee_id: str, body: Fire, w: dict = Depends(who)):
+        try:
+            return await run_in_threadpool(staff.fire, store, market, w, employee_id, body.reason, tokens, tokens_path)
+        except staff.StaffRefused as e:
+            raise HTTPException(409, str(e))
+
     @app.post("/evaluate")
     async def evaluate(body: Evaluate, w: dict = Depends(who)):
         """Score a strategy (code defining decide(bars)) on the held-out window. Aggregates only."""
@@ -202,8 +234,8 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
 def _from_env() -> FastAPI:
     db = os.path.expanduser(os.environ.get("OFFICE_DB", "~/pixel-office/office.db"))
     os.makedirs(os.path.dirname(db), exist_ok=True)
-    tokens = json.loads(Path(os.path.expanduser(os.environ.get("OFFICE_TOKENS", "~/pixel-office/tokens.json"))).read_text())
-    return create_app(Store(db), ClickHouseMarket(), tokens)
+    tokens_path = Path(os.path.expanduser(os.environ.get("OFFICE_TOKENS", "~/pixel-office/tokens.json")))
+    return create_app(Store(db), ClickHouseMarket(), json.loads(tokens_path.read_text()), tokens_path=tokens_path)
 
 
 app = _from_env() if os.environ.get("OFFICE_DB") or os.environ.get("OFFICE_TOKENS") else None

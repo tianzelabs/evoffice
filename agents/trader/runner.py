@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import io
+import shutil
 import types
 
 import dill
@@ -46,7 +47,8 @@ local_repl._SAFE_BUILTINS["__build_class__"] = builtins.__build_class__
 HERE = Path(__file__).parent
 MODEL = os.environ.get("TRADER_MODEL", "anthropic/claude-haiku-5.5")
 STATE = Path(os.environ.get("TRADER_STATE", "/state"))
-HEARTBEAT_S = int(os.environ.get("TRADER_HEARTBEAT_S", "3600"))
+HEARTBEAT_S = int(os.environ.get("TRADER_HEARTBEAT_S", "3600"))   # default; the manager can change it
+FIRED_EXIT = 75                                                       # non-zero, so systemd restarts the seat
 MIN_GAP_S = int(os.environ.get("TRADER_MIN_GAP_S", "120"))      # never two turns closer than this
 BARS_MIN = 1440
 MIN_BUDGET_USD = 0.005
@@ -213,6 +215,26 @@ class Runner:
         if lost:   # never `except: pass` -- tell the trader what a restart would erase
             self.notes.append("these objects could not be saved and would be lost on a restart: " + ", ".join(lost))
 
+    # ---------- the manager's authority, as the runner obeys it ----------
+    def check_employment(self):
+        """Fired: the seat's token now names a successor. Wipe everything this trader was and exit;
+        the restarted container is a new hire with an empty REPL. The record stays on the board."""
+        me = self.office.me()["id"]
+        if me == self.me:
+            return
+        log(f"{self.me} was fired; {me} takes the seat. Wiping objects and history.")
+        for name in ("objects.dill", "history.dill", "runner.json"):
+            (STATE / name).unlink(missing_ok=True)
+        if (STATE / "trajectories").exists():           # kept for the record, out of the new hire's way
+            shutil.move(str(STATE / "trajectories"), str(STATE / f"trajectories-{self.me}"))
+        os._exit(FIRED_EXIT)
+
+    def heartbeat_s(self) -> int:
+        mine = [e for e in self.office.get("/employees") if e["id"] == self.me]
+        p = mine[0]["params"] if mine else {}
+        self.params = p
+        return int(p["heartbeat_min"]) * 60 if p.get("heartbeat_min") else HEARTBEAT_S
+
     # ---------- the minute loop ----------
     def refresh(self):
         if not self.bars:
@@ -251,6 +273,7 @@ class Runner:
             "chat_new": (list(self.chat_new), "chat messages since your last turn", f"{len(self.chat_new)} new"),
             "chat_recent": (list(self.chat_recent), "the last 40 chat messages", ""),
             "budget": (budget, "today's model budget for traders, USD", ""),
+            "my_params": (dict(getattr(self, "params", {})), "limits the manager has set for you (heartbeat_min, max_size, max_hold_min)", ""),
             "office_time": (now, "the office clock", ""),
         }
         for name, (value, meaning, note) in facts.items():
@@ -278,8 +301,9 @@ class Runner:
             ms = (time.perf_counter() - t0) * 1000
             if ms > 2000:
                 self.notes.append(f"your should_wake took {ms:.0f} ms; it runs every minute, keep it fast")
-        if time.time() - self.last_turn >= HEARTBEAT_S:
-            reasons.append(f"heartbeat (every {HEARTBEAT_S // 60} min)")
+        hb = self.heartbeat_s()
+        if time.time() - self.last_turn >= hb:
+            reasons.append(f"heartbeat (every {hb // 60} min)")
         return reasons
 
     def turn(self, reasons: list[str]):
@@ -327,6 +351,7 @@ class Runner:
         while max_turns is None or self.turn_n < max_turns:
             time.sleep(60 - time.time() % 60 + 3)            # just after each minute closes
             try:
+                self.check_employment()
                 note = self.refresh()
                 reasons = self.wake_reasons()
                 if not reasons or time.time() - self.last_turn < MIN_GAP_S:

@@ -8,3 +8,5 @@ Nothing here is installed until the phase that needs it.
 It binds the Tailscale address only, port 8710; tokens live in `~/pixel-office/tokens.json` (mode 600, never in the repo).
 
 `office-trader-1.service` (P1): trader-1's container, `docker run` under systemd. Its env file `~/pixel-office/trader-1.env` holds only trader-1's office token -- never the model key, never another employee's token. Objects persist in `~/pixel-office/trader-1-state/`.
+
+`office-manager.service` (P2): the manager, a host process in the repo venv. Env file `~/pixel-office/manager.env` holds only the manager token. Model claude-sonnet-5.5, heartbeat 6 h. Notes and every turn in `~/pixel-office/manager-state/`.

@@ -1,0 +1,18 @@
+[Unit]
+Description=Pixel Office -- the manager (LangChain agent; holds no model key)
+After=office-server.service
+Requires=office-server.service
+
+[Service]
+WorkingDirectory=%h/pixel-office-home/pixel-office
+EnvironmentFile=%h/pixel-office/manager.env
+Environment=MANAGER_MODEL=anthropic/claude-sonnet-5.5
+# ~$0.044 a turn measured; 6 h heartbeat = 4 turns/day inside the $0.20 budget, leaving room for the boss
+Environment=MANAGER_HEARTBEAT_S=21600
+Environment=MANAGER_STATE=%h/pixel-office/manager-state
+ExecStart=%h/pixel-office-home/pixel-office/.venv/bin/python -m agents.manager.runner
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target
