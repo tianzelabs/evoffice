@@ -285,6 +285,7 @@ class Runner:
             px = {"error": str(e)}
         budget = self.office.budget()
         staff = self.office.get("/employees")
+        prog = self.office.get("/progress").get(self.me, {})
         self.my_name = next((e.get("name") for e in staff if e["id"] == self.me), None)
         evals = [{"ts": e["ts"][:19], **e["payload"]} for e in self._my_events("evaluation")][-5:]
         facts = {
@@ -295,6 +296,7 @@ class Runner:
             "chat_new": (list(self.chat_new), "chat messages since your last turn", f"{len(self.chat_new)} new"),
             "chat_recent": (list(self.chat_recent), "the last 40 chat messages", ""),
             "budget": (budget, "today's model budget for traders, USD", ""),
+            "my_progress": (prog, "your XP, level, title, perks (max_size, budget), probation flag and badges -- see Career in the mechanics", ""),
             "colleagues": ([{"id": e["id"], "name": e.get("name"), "role": e["role"]} for e in staff if not e["fired_ts"]],
                            "who works here: address people by id in say(text, to=id); call them by name", ""),
             "my_params": (dict(getattr(self, "params", {})), "limits the manager has set for you (heartbeat_min, max_size, max_hold_min)", ""),

@@ -106,6 +106,7 @@ def briefing(office: Office, since: int, notes: str) -> str:
         f"Office time: {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC",
         "", "WHAT HAPPENED SINCE YOUR LAST WAKE (oldest first):", *(lines or ["(nothing)"]),
         "", "LEADERBOARD: " + ops.leaderboard(office)[:3000],
+        "CAREERS (XP from validated improvement): " + ops.progress(office)[:2000],
         "BUDGETS TODAY: " + json.dumps(office.get("/budget")),
         "", "YOUR NOTES FROM LAST TIME: " + (notes or "(none)"),
     ])

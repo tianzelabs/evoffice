@@ -2,7 +2,7 @@
 import * as Phaser from "phaser";
 import { allEvents, getJSON, stream } from "./net";
 import { OfficeScene, W, H } from "./office";
-import { addToLog, displayName, initPanel, learnNames, refreshBoard, refreshBudget, refreshIterations, setPrice } from "./panel";
+import { addToLog, displayName, initPanel, learnNames, refreshBoard, refreshBudget, refreshIterations, setCareers, setPrice } from "./panel";
 import "./style.css";
 
 const scene = new OfficeScene();
@@ -11,6 +11,18 @@ new Phaser.Game({
   type: Phaser.AUTO, parent: "room", width: W, height: H, backgroundColor: "#d9cbb4",
   pixelArt: true, scene, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_HORIZONTALLY },
 });
+
+let careerTimer: number | undefined;
+async function careers() {
+  clearTimeout(careerTimer);                  // spend events come in bursts; refresh once they settle
+  careerTimer = window.setTimeout(async () => {
+    try {
+      const [prog, budgets] = await Promise.all([getJSON("/progress"), getJSON("/budget")]);
+      scene.setProgress(prog, budgets);
+      setCareers(prog);
+    } catch { /* offline */ }
+  }, 800);
+}
 
 async function board() { try { scene.setBoard(await refreshBoard()); } catch { /* offline */ } }
 
@@ -36,8 +48,10 @@ async function market() {
     if (["open", "close", "fire", "hire"].includes(e.kind)) board();
     if (e.kind === "spend") refreshBudget();
     if (["version", "evaluation", "close", "fire"].includes(e.kind)) refreshIterations().catch(() => {});
+    if (["level", "badge", "evaluation", "close", "version", "spend", "name"].includes(e.kind)) careers();
   });
-  board(); market(); refreshBudget(); refreshIterations().catch(() => {});
+  board(); market(); refreshBudget(); refreshIterations().catch(() => {}); careers();
+  setInterval(careers, 60_000);
   setInterval(market, 15_000);
   setInterval(board, 60_000);
 })();

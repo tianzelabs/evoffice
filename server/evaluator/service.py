@@ -87,6 +87,8 @@ def evaluate(store: Store, market, who: dict, code: str, runner=docker_runner, v
         result["candidate"] = hashlib.sha256(code.encode()).hexdigest()[:10]
         result["version"] = version
         store.emit(who["id"], "evaluation", {k: v for k, v in result.items() if k != "reminder"})
+        from .. import progress
+        progress.announce(store, who["id"])
     result["reminder"] = ("Aggregates only, over the 60 days ending 7 days ago -- data you cannot fetch. "
                           f"This is try {n + 1} today; the more tries, the more likely one looks good by chance.")
     return result

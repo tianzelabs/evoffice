@@ -28,6 +28,15 @@ Direction
   and lost 22.5 bps a trade on unseen data. Untried: other horizons, exits other
   than a fixed hold, sizing by the volatility forecast.
 
+Career (computed by the office from what you did; you cannot set it)
+- XP comes from VALIDATED IMPROVEMENT, not from profit: +3 per held-out evaluation,
+  +15 when a held-out result beats your previous best by >= 1 bps/trade, +50 when its
+  95% interval is entirely above zero, +10 for a strategy version you tested (evaluated
+  or traded live) before replacing it, +2 per closed live trade (max +10 a day).
+- Levels: Junior 0 XP (max 0.005 BTC), Associate 60 (0.01), Trader 150 (0.02),
+  Senior 300 (0.035, $0.35/day), Lead 600 (0.05, $0.40/day).
+- No new version and no evaluation for 24 h puts you on probation, visible to all.
+
 Live experiments
 - A few small live paper trades (0.005 BTC) of a FROZEN, written-down hypothesis are the
   cleanest test there is: the future is data nobody -- you included -- has seen. Prefer

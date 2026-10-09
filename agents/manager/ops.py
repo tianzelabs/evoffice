@@ -110,6 +110,11 @@ def trader_activity(office: Office, trader: str, n: int = 10) -> str:
                        "wake_reasons_last_24h": dict(wakes)}, ensure_ascii=False)[:20000]
 
 
+def progress(office: Office) -> str:
+    """Each trader's XP, level, perks, probation and badges (earned by validated improvement)."""
+    return json.dumps(_safe(lambda: office.get("/progress")), ensure_ascii=False)
+
+
 def trader_positions(office: Office, trader: str) -> str:
     return json.dumps(_safe(lambda: office.positions(trader))[:50], ensure_ascii=False)
 

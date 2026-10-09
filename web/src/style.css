@@ -30,6 +30,7 @@ table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 th, td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
 .pos { color: var(--trader); } .neg { color: var(--boss); }
+.lv { font-size: 10px; padding: 0 4px; border-radius: 4px; background: #e8c54733; color: #8a6d00; }
 aside { overflow: auto; }
 .iter { margin-bottom: 14px; }
 .scroll-x { overflow-x: auto; }

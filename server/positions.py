@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from . import settlement
+from . import progress, settlement
 from .market import Stale
 from .store import Store, now
 
@@ -29,9 +29,11 @@ def open_position(store: Store, market, employee_id: str, pair: str, side: str, 
         raise Refused("v0 trades BTC/USD only")
     if side not in ("long", "short"):
         raise Refused("side must be 'long' or 'short'")
-    cap = float(emp["params"].get("max_size", MAX_SIZE_BTC))
+    level = progress.compute(store, employee_id)
+    cap = min(float(emp["params"].get("max_size", MAX_SIZE_BTC)), level["max_size"])
     if not 0 < size <= cap:
-        raise Refused(f"size must be > 0 and <= {cap} BTC")
+        raise Refused(f"size must be > 0 and <= {cap} BTC (level {level['level']} {level['title']} allows "
+                      f"{level['max_size']}; earn XP by validated improvement to unlock more)")
     hold = int(max_hold_s or emp["params"].get("max_hold_s", DEFAULT_MAX_HOLD_S))
     try:
         q = market.quote(pair)
@@ -65,6 +67,7 @@ def close_position(store: Store, market, position_id: int, actor: str, reason: s
     store.emit(actor, "close", {"position": position_id, "employee": p["employee_id"], "reason": reason,
                                 "exit_px": q.price, "gross": round(r.gross, 4), "fees": round(r.fees, 4),
                                 "pnl": round(r.pnl, 4), "pnl_bps": round(r.pnl_bps, 2)})
+    progress.announce(store, p["employee_id"])
     return get(store, position_id)
 
 

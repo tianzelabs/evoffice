@@ -62,8 +62,12 @@ def spent_today(store: Store, employee: str) -> float:
 
 
 def budget(store: Store, employee: str, role: str) -> dict:
-    """Each employee has its own cap: a second trader adds a budget, it does not halve one."""
+    """Each employee has its own cap: a second trader adds a budget, it does not halve one.
+    A trader's cap grows with its level (server/progress.py)."""
     cap = BUDGET_USD.get(role, 0.0)
+    if role == "trader":
+        from . import progress
+        cap = progress.compute(store, employee)["budget_usd"]
     s = spent_today(store, employee)
     return {"employee": employee, "role": role, "spent_usd": round(s, 6), "cap_usd": cap,
             "left_usd": round(max(0.0, cap - s), 6)}

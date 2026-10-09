@@ -22,6 +22,8 @@ function line(e: OfficeEvent): string | null {
   switch (e.kind) {
     case "say": return `${a}${p.to ? " → " + esc(displayName(p.to)) : ""}: ${esc(p.text)}`;
     case "name": return `<span class="sys">${esc(p.previous ?? e.actor)} is now called <b>${esc(p.name)}</b></span>`;
+    case "level": return `<span class="sys">${a} reached level ${p.level}: <b>${esc(p.title)}</b> — size cap ${p.max_size} BTC</span>`;
+    case "badge": return `<span class="sys">${a} earned a badge: 🏅 ${esc(p.title)}</span>`;
     case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} @ ${p.entry_px}</span>`;
     case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}) · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span></span>`;
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
@@ -49,12 +51,18 @@ export function addToLog(e: OfficeEvent) {
   if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
+let careerOf: Record<string, any> = {};
+export function setCareers(prog: Record<string, any>) {
+  careerOf = prog;
+  refreshBoard().catch(() => {});
+}
+
 export async function refreshBoard() {
   const b = await getJSON("/leaderboard");
   const n = (x: unknown) => (x == null ? "–" : String(x));
   const sign = (x: number | null) => (x == null ? "" : x >= 0 ? "pos" : "neg");
   $("#board tbody").innerHTML = b.by_employee.map((r: any) =>
-    `<tr><td title="${esc(r.employee)}">${esc(displayName(r.employee))}${r.fired ? " ✝" : ""}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${n(r.net_pnl)}</td><td>${n(r.avg_net_bps)}</td><td>${r.open_positions}</td></tr>`).join("");
+    `<tr><td title="${esc(r.employee)}${careerOf[r.employee] ? " · " + careerOf[r.employee].xp + " XP · badges: " + esc(careerOf[r.employee].badges.join(", ")) : ""}">${esc(displayName(r.employee))}${careerOf[r.employee] ? ` <span class="lv">Lv${careerOf[r.employee].level}${careerOf[r.employee].probation ? "⚠" : ""}</span>` : ""}${r.fired ? " ✝" : ""}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${n(r.net_pnl)}</td><td>${n(r.avg_net_bps)}</td><td>${r.open_positions}</td></tr>`).join("");
   $("#versions tbody").innerHTML = b.by_version.map((r: any) =>
     `<tr><td>${esc(displayName(r.employee))} · ${esc(String(r.strategy_version).slice(0, 8))}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${r.net_pnl}</td><td>${n(r.avg_net_bps)}</td></tr>`).join("") ||
     `<tr><td colspan="4" class="muted">no closed positions yet</td></tr>`;

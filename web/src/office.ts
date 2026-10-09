@@ -139,6 +139,8 @@ export class OfficeScene extends Phaser.Scene {
   actors: Record<string, Actor | undefined> = {};      // keyed by seat: "trader-1", "trader-2", "manager", "boss"
   seatOf: Record<string, string> = {};     // employee id -> seat
   plates: Record<string, Phaser.GameObjects.Text> = {};
+  bars: Record<string, Phaser.GameObjects.Graphics> = {};      // per plate: XP (gold) and budget left (green)
+  levels: Record<string, string> = {};                        // employee id -> "Lv2"
   screens: { chart: Phaser.GameObjects.Graphics; code: Phaser.GameObjects.Graphics; price: Phaser.GameObjects.Text; place: Place }[] = [];
   screenText!: Phaser.GameObjects.Text;
   whiteboard!: Phaser.GameObjects.Text;
@@ -258,9 +260,10 @@ export class OfficeScene extends Phaser.Scene {
     d.fillStyle(0x3a3a3a).fillRect(x - 98, y - 58, 3, 18);                 // lamp
     d.fillStyle(0xe8c547).fillTriangle(x - 104, y - 58, x - 88, y - 58, x - 96, y - 66);
     this.lamps.push(this.add.ellipse(x - 96, y - 52, 120, 60, 0xffd27a, 0).setDepth(9_001));
-    // the name plate on the desk front
+    // the name plate on the desk front, and under it the XP and energy bars
     this.plates[p.plate] = this.add.text(x, y - 6, p.plate, TXT(9, "#3a2f22", { backgroundColor: "#f4e6c8", padding: { x: 4, y: 1 } }))
       .setOrigin(0.5, 1).setDepth(y + 4);
+    this.bars[p.plate] = this.add.graphics().setDepth(y + 4);
     if (p !== MANAGER_PLACE) {
       const code = this.add.graphics().setDepth(y + 3);
       const chart = this.add.graphics().setDepth(y + 3);
@@ -319,6 +322,31 @@ export class OfficeScene extends Phaser.Scene {
     return (this.actors[seat] = a);
   }
 
+  plateText(employee: string) {
+    const lv = this.levels[employee];
+    return (this.nameOf(employee) + (lv ? " · " + lv : "")).toUpperCase();
+  }
+
+  /** XP toward the next level (gold) and today's budget left (green) under each trader's plate */
+  setProgress(progress: Record<string, any>, budgets: any[]) {
+    for (const [id, p] of Object.entries(progress)) {
+      this.levels[id] = `Lv${p.level}${p.probation ? " (probation)" : ""}`;
+      const a = this.actors[this.seat(id)];
+      if (!a?.place) continue;
+      this.plates[a.place.plate]?.setText(this.plateText(id));
+      const b = budgets.find((x) => x.employee === id);
+      const lvls = [0, 60, 150, 300, 600], cur = lvls[p.level - 1] ?? 0, nxt = p.next_level_xp;
+      const xpFrac = nxt ? Math.min(1, (p.xp - cur) / (nxt - cur)) : 1;
+      const energy = b ? Math.max(0, b.left_usd / Math.max(1e-9, b.cap_usd)) : 1;
+      const { x, y } = a.place.desk;
+      const g = this.bars[a.place.plate];
+      g.clear();
+      g.fillStyle(0x000000, 0.35).fillRect(x - 40, y + 2, 80, 4).fillRect(x - 40, y + 8, 80, 4);
+      g.fillStyle(0xe8c547).fillRect(x - 40, y + 2, 80 * xpFrac, 4);
+      g.fillStyle(energy > 0.25 ? 0x5dcf7a : 0xd9534f).fillRect(x - 40, y + 8, 80 * energy, 4);
+    }
+  }
+
   bossPresent(): boolean { return (this.actors.boss?.sprite.alpha ?? 0) > 0.5; }
 
   float(at: Pt, text: string, color = "#1d1d1f", icon?: string) {
@@ -367,7 +395,7 @@ export class OfficeScene extends Phaser.Scene {
       const a = this.actor(p.employee);
       if (a) {
         a.rename(p.name);
-        if (a.place) this.plates[a.place.plate]?.setText(String(p.name).toUpperCase());
+        if (a.place) this.plates[a.place.plate]?.setText(this.plateText(p.employee));
         if (live) this.float(this.over(a), `I'm ${p.name}`, "#1a5fb4");
       }
       return;
@@ -406,6 +434,8 @@ export class OfficeScene extends Phaser.Scene {
     switch (e.kind) {
       case "say": this.converse(a, p.to ?? null, p.text); break;
       case "wake": this.float(this.over(a), "!", "#c62828", "alert"); break;
+      case "level": this.float(this.over(a), `LEVEL UP! ${p.title}`, "#b8860b", "bulb"); break;
+      case "badge": this.float(this.over(a), `🏅 ${p.title}`, "#7a5a00"); break;
       case "version": this.float(this.over(a), `new strategy ${String(p.version ?? "").slice(0, 6)}`, "#7a5a00", "bulb"); break;
       case "evaluation":
         this.float(this.over(a), `held-out: ${p.net_bps_per_trade ?? "–"} bps/trade`, (p.net_bps_per_trade ?? -1) > 0 ? "#1b7a3d" : "#c62828");

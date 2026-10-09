@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import iterations, leaderboard, names, positions, staff
+from . import iterations, leaderboard, names, positions, progress, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
@@ -177,6 +177,11 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     def board():
         return leaderboard.standings(store)
 
+    @app.get("/progress")
+    def progress_all():
+        """XP, level, title, perks, probation and badges per trader -- earned by validated improvement."""
+        return progress.all_progress(store)
+
     @app.get("/iterations")
     def iteration_timeline():
         """Each trader's strategy versions with their held-out evaluations: did the change help?"""
@@ -196,7 +201,10 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             raise HTTPException(422, f"kind must be one of {sorted(REPORTABLE)}")
         if len(json.dumps(body.payload)) > 4000:
             raise HTTPException(413, "payload too large")
-        return store.emit(w["id"], body.kind, body.payload)
+        ev = store.emit(w["id"], body.kind, body.payload)
+        if body.kind == "version":
+            progress.announce(store, w["id"])
+        return ev
 
     @app.post("/me/name")
     def name_me(body: Name, w: dict = Depends(who)):

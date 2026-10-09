@@ -34,4 +34,6 @@ def set_name(store: Store, who: dict, name: str) -> dict:
         raise NameRefused("you can rename once a day")
     store.x("UPDATE employees SET name = ? WHERE id = ?", (name, who["id"]))
     store.emit(who["id"], "name", {"employee": who["id"], "name": name, "previous": me.get("name"), "at": now()})
+    from . import progress
+    progress.announce(store, who["id"])
     return store.employee(who["id"])

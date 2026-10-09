@@ -2,6 +2,7 @@
 
     office chat [N]                      last N chat messages
     office board                         leaderboard
+    office progress                      traders' XP, levels, probation, badges
     office employees                     everyone, with traders' parameters
     office activity TRADER [N]           a trader's turns, versions, evaluations, wake reasons
     office positions TRADER              a trader's positions
@@ -26,6 +27,7 @@ def main(argv: list[str]) -> str:
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("chat"); c.add_argument("n", nargs="?", type=int, default=30)
     sub.add_parser("board")
+    sub.add_parser("progress")
     sub.add_parser("employees")
     a = sub.add_parser("activity"); a.add_argument("trader"); a.add_argument("n", nargs="?", type=int, default=10)
     p = sub.add_parser("positions"); p.add_argument("trader")
@@ -40,6 +42,7 @@ def main(argv: list[str]) -> str:
     o = Office()
     if args.cmd == "chat": return ops.read_recent_chat(o, args.n)
     if args.cmd == "board": return ops.leaderboard(o)
+    if args.cmd == "progress": return ops.progress(o)
     if args.cmd == "employees": return ops.employees(o)
     if args.cmd == "activity": return ops.trader_activity(o, args.trader, args.n)
     if args.cmd == "positions": return ops.trader_positions(o, args.trader)
