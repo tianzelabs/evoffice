@@ -28,9 +28,13 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
+import io
+import types
+
 import dill
 import rlm.environments.local_repl as local_repl
 from rlm import RLM
+from rlm.logger import RLMLogger
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from agents.common.office_client import Office, Refused   # noqa: E402
@@ -90,7 +94,9 @@ class Runner:
                        environment="local", persistent=True, custom_tools=tools,
                        max_iterations=12, max_budget=0.04, max_timeout=300, user_prologue=prologue,
                        # the office caps output at 8192 too; this is the tighter, per-call one
-                       sampling_args={"max_tokens": 4096}, sub_sampling_args={"max_tokens": 4096})
+                       sampling_args={"max_tokens": 4096}, sub_sampling_args={"max_tokens": 4096},
+                       # every turn's full trajectory, for debugging now and for the manager's review later
+                       logger=RLMLogger(log_dir=str(STATE / "trajectories"), file_name="trader"))
 
     # ---------- tools (what the trader can do from its REPL) ----------
     def _open(self, side, size, max_hold_s=None):
@@ -172,22 +178,27 @@ class Runner:
             self.notes.append(f"the office restarted; your objects were restored: {', '.join(sorted(saved)) or 'none'}")
         h = STATE / "history.dill"
         if h.exists():
-            self.ns["history_before_restart"] = dill.loads(h.read_bytes())
-            self.facts["history_before_restart"] = ("your turns from before the last restart, as message lists", utc(), "")
+            # deliberately NOT named history_<n>: rlms owns that numbering, and the map parses it
+            self.ns["past_turns_before_restart"] = dill.loads(h.read_bytes())
+            self.facts["past_turns_before_restart"] = ("your turns from before the last restart, as message lists", utc(), "")
 
     def snapshot(self):
         own = mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs))
+        # recurse=True pickles only the globals a function actually uses. Without it dill pickles
+        # the REPL's whole global dict -- which holds the office tools and their HTTP client -- and
+        # every function and class fails (found live: should_wake vanished on the first restart).
         keep, lost = {}, []
         for k in own:
+            if isinstance(self.ns[k], (types.ModuleType, io.IOBase)):
+                continue          # re-importable, or a handle that means nothing after a restart
             try:
-                dill.dumps(self.ns[k])
+                dill.dumps(self.ns[k], recurse=True)
                 keep[k] = self.ns[k]
             except Exception as e:
                 lost.append(f"{k} ({type(e).__name__})")
-        (STATE / "objects.dill").write_bytes(dill.dumps(keep))
-        hist = [self.ns[k] for k in sorted((k for k in self.ns if k.startswith("history_")),
-                                           key=lambda k: int(k.split("_")[1]))]
-        prev = self.ns.get("history_before_restart") or []
+        (STATE / "objects.dill").write_bytes(dill.dumps(keep, recurse=True))
+        hist = [self.ns[k] for k in mapmod.history_names(self.ns)]
+        prev = self.ns.get("past_turns_before_restart") or []
         (STATE / "history.dill").write_bytes(dill.dumps(list(prev) + hist[-50:]))
         (STATE / "runner.json").write_text(json.dumps({"turn_n": self.turn_n, "version": self.version,
                                                        "last_seen": self.last_seen}))
@@ -264,6 +275,9 @@ class Runner:
         return reasons
 
     def turn(self, reasons: list[str]):
+        # set first: a turn that fails anywhere still backs off by MIN_GAP_S instead of
+        # retrying every minute (found live: a map bug re-woke the trader each minute)
+        self.last_turn = time.time()
         self.turn_n += 1
         a = self.ns.get("answer")
         if isinstance(a, dict):

@@ -8,6 +8,10 @@ however much sits underneath.
 """
 from __future__ import annotations
 
+import re
+
+HISTORY = re.compile(r"^history_\d+$")
+
 SCAFFOLD = {"answer", "context", "history", "llm_query", "llm_query_batched", "rlm_query", "rlm_query_batched",
             "SHOW_VARS", "FINAL_VAR"}
 
@@ -32,7 +36,11 @@ def shape(v) -> str:
 
 def own_objects(ns: dict, facts: set, tools: set) -> list[str]:
     return sorted(k for k in ns if not k.startswith("_") and k not in facts and k not in tools
-                  and k not in SCAFFOLD and not k.startswith(("context_", "history_")))
+                  and k not in SCAFFOLD and not k.startswith("context_") and not HISTORY.match(k))
+
+
+def history_names(ns: dict) -> list[str]:
+    return sorted((k for k in ns if HISTORY.match(k)), key=lambda k: int(k.split("_")[1]))
 
 
 def render(ns: dict, facts: dict[str, tuple[str, str, str]], tools: dict[str, str], wake: list[str],
@@ -49,7 +57,7 @@ def render(ns: dict, facts: dict[str, tuple[str, str, str]], tools: dict[str, st
     out.append("YOUR OBJECTS (you created them; they persist): "
                + (", ".join(f"{k} ({shape(ns[k])})" for k in mine) or "none yet"))
     out.append(f"YOUR STRATEGY VERSION (measured by the office from your functions and models): {version or 'none yet'}")
-    hist = sorted((k for k in ns if k.startswith("history_")), key=lambda k: int(k.split("_")[1]))
+    hist = history_names(ns)
     if hist:
         out.append(f"YOUR PAST TURNS: {hist[0]} .. {hist[-1]} ({len(hist)} message lists; read only what you need)")
     for n in notes:
