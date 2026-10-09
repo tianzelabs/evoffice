@@ -23,7 +23,8 @@ function line(e: OfficeEvent): string | null {
     case "command": return `<span class="sys">${a} set ${esc(p.employee)} ${esc(JSON.stringify(p.changes))}${p.reason ? " — " + esc(p.reason) : ""}</span>`;
     case "fire": return `<span class="sys">${a} FIRED ${esc(p.employee)} → ${esc(p.successor)} — ${esc(p.reason)}</span>`;
     case "evaluation": return `<span class="sys">${a} held-out test: ${p.trades ?? 0} trades, ${p.net_bps_per_trade ?? "–"} bps/trade${p.ci95_net_bps_per_trade ? " [" + p.ci95_net_bps_per_trade.join(", ") + "]" : ""}</span>`;
-    default: return null;   // spend, agent_state, turn: shown in the room, not the log
+    case "agent_state": return p.state === "asleep" ? `<span class="sys">${a} is asleep: ${esc(p.why ?? "")}</span>` : null;
+    default: return null;   // spend, turn, other states: shown in the room, not the log
   }
 }
 

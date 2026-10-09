@@ -72,7 +72,8 @@ class Runner:
         self.version = st.get("version")
         fresh = "last_seen" not in st
         self.last_seen = st.get("last_seen") or self._latest_event_id()   # a new hire starts from now
-        self.last_turn = 0.0
+        self.last_turn = st.get("last_turn", 0.0)     # persisted: a restart is not a reason to wake
+        self.asleep_said = False
         self.bars: list[dict] = []
         self.chat_recent: list[dict] = []
         self.chat_new: list[dict] = []
@@ -221,7 +222,7 @@ class Runner:
         prev = self.ns.get("past_turns_before_restart") or []
         (STATE / "history.dill").write_bytes(dill.dumps(list(prev) + hist[-50:]))
         (STATE / "runner.json").write_text(json.dumps({"turn_n": self.turn_n, "version": self.version,
-                                                       "last_seen": self.last_seen}))
+                                                       "last_seen": self.last_seen, "last_turn": self.last_turn}))
         if lost:   # never `except: pass` -- tell the trader what a restart would erase
             self.notes.append("these objects could not be saved and would be lost on a restart: " + ", ".join(lost))
 
@@ -275,6 +276,7 @@ class Runner:
         except Refused as e:
             px = {"error": str(e)}
         budget = self.office.budget()
+        evals = [{"ts": e["ts"][:19], **e["payload"]} for e in self._my_events("evaluation")][-5:]
         facts = {
             "bars_1m": (list(self.bars), "BTC/USD closed 1-minute bars, oldest first; keys m (UTC minute), o, h, l, c, v", bar_note),
             "price_now": (px, "last trade price and its age in seconds", ""),
@@ -284,11 +286,21 @@ class Runner:
             "chat_recent": (list(self.chat_recent), "the last 40 chat messages", ""),
             "budget": (budget, "today's model budget for traders, USD", ""),
             "my_params": (dict(getattr(self, "params", {})), "limits the manager has set for you (heartbeat_min, max_size, max_hold_min)", ""),
+            "my_evaluations": (evals, "your last 5 held-out evaluation results, as the office recorded them (even if your call timed out)", ""),
             "office_time": (now, "the office clock", ""),
         }
         for name, (value, meaning, note) in facts.items():
             ns[name] = value
             self.facts[name] = (meaning, now, note)
+
+    def _my_events(self, kind: str) -> list[dict]:
+        out, since = [], 0
+        while True:
+            evs = self.office.events(since)
+            if not evs:
+                return out
+            out += [e for e in evs if e["kind"] == kind and e["actor"] == self.me]
+            since = evs[-1]["id"]
 
     def wake_reasons(self) -> list[str]:
         reasons = []
@@ -367,8 +379,12 @@ class Runner:
                 if not reasons or time.time() - self.last_turn < MIN_GAP_S:
                     continue
                 left = self.office.budget()["left_usd"]
-                if left < MIN_BUDGET_USD:
-                    continue                                 # asleep until the budget resets
+                if left < MIN_BUDGET_USD:                    # asleep until the budget resets -- and say so
+                    if not self.asleep_said:
+                        self.office.report("agent_state", {"state": "asleep", "why": f"model budget spent; woke for: {'; '.join(reasons)}"})
+                        self.asleep_said = True
+                    continue
+                self.asleep_said = False
                 self.write_facts(note)
                 self.turn(reasons)
             except Exception as e:

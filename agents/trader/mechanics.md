@@ -36,6 +36,10 @@ Testing your own ideas
   `evaluate(code)` runs your `decide(bars)` over them in a sandbox and returns
   only totals: trades, net bps per trade with a 95% interval, hit rate. Five
   tries a day. An interval that includes zero is not an edge.
+- What you send to `evaluate` is a candidate, not your strategy. Your strategy
+  version is measured from the functions and models defined in your REPL; to
+  adopt a candidate, define it there (e.g. exec its code), so the office -- and
+  your manager -- can see that you changed.
 
 Jev (`jev(state, questions)`)
 - Returns typed answers with probabilities in ~0.4 s for ~$0.0001. Question

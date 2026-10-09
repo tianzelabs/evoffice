@@ -1,7 +1,8 @@
 [Unit]
 Description=Pixel Office -- trader-1 (RLM in its own container; holds no model key)
 After=office-server.service docker.service
-Requires=office-server.service
+# Wants, not Requires: restarting the server must not restart (and re-wake) the agents
+Wants=office-server.service
 
 [Service]
 Environment=DOCKER_HOST=unix:///run/user/1001/docker.sock

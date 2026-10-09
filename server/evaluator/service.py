@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +26,11 @@ TIMEOUT_S = 180
 REPO = Path(__file__).resolve().parents[2]
 IMAGE = os.environ.get("OFFICE_EVAL_IMAGE", "pixel-office-trader")
 CACHE = Path(os.path.expanduser(os.environ.get("OFFICE_HELDOUT_DIR", "~/pixel-office/heldout")))
+
+
+# Check the quota, run, and record as ONE step. Found live: two calls arriving together both
+# read "0 used today", both ran, and both were recorded as try 1. Evaluations now run one at a time.
+_LOCK = threading.Lock()
 
 
 class EvalRefused(Exception):
@@ -70,12 +76,13 @@ def evaluate(store: Store, market, who: dict, code: str, runner=docker_runner) -
         raise EvalRefused("only traders submit strategies for evaluation")
     if not code or len(code) > MAX_CODE:
         raise EvalRefused(f"code must be 1..{MAX_CODE} characters")
-    n = used_today(store, who["id"])
-    if n >= PER_DAY:
-        raise EvalRefused(f"you have used all {PER_DAY} evaluations today")
-    result = runner(heldout_file(market), code)
-    result["evaluations_used_today"] = n + 1
+    with _LOCK:
+        n = used_today(store, who["id"])
+        if n >= PER_DAY:
+            raise EvalRefused(f"you have used all {PER_DAY} evaluations today")
+        result = runner(heldout_file(market), code)
+        result["evaluations_used_today"] = n + 1
+        store.emit(who["id"], "evaluation", {k: v for k, v in result.items() if k != "reminder"})
     result["reminder"] = ("Aggregates only, over the 60 days ending 7 days ago -- data you cannot fetch. "
                           f"This is try {n + 1} today; the more tries, the more likely one looks good by chance.")
-    store.emit(who["id"], "evaluation", {k: v for k, v in result.items() if k != "reminder"})
     return result

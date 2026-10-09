@@ -33,8 +33,8 @@ class Office:
     def get(self, path: str, **params):
         return self._ok(self.http.get(path, params=params))
 
-    def post(self, path: str, body: dict | None = None):
-        return self._ok(self.http.post(path, json=body or {}))
+    def post(self, path: str, body: dict | None = None, timeout: float | None = None):
+        return self._ok(self.http.post(path, json=body or {}, timeout=timeout or self.http.timeout))
 
     # the acts
     def me(self) -> dict: return self.get("/me")
@@ -56,7 +56,9 @@ class Office:
         return self.post(f"/positions/{int(position_id)}/close")
 
     def evaluate(self, code: str) -> dict:
-        return self.post("/evaluate", {"code": code})
+        # a held-out run takes ~60 s; at the default 30 s the client gave up while the office
+        # finished, recorded the result and spent one of the day's tries (found live)
+        return self.post("/evaluate", {"code": code}, timeout=300)
 
     def jev(self, state, questions: dict) -> dict:
         r = self.post("/llm/api/alpha/decisions", {"model": "typesafe/jev-1.13", "state": state, "questions": questions})

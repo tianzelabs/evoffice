@@ -67,6 +67,16 @@ def test_a_trader_gets_a_few_tries_a_day(office):
     assert r.status_code == 409 and len(calls) == service.PER_DAY
 
 
+def test_simultaneous_calls_cannot_share_a_try(office):
+    import concurrent.futures as cf
+    c, calls = office
+    with cf.ThreadPoolExecutor(8) as ex:
+        rs = list(ex.map(lambda _: c.post("/evaluate", json={"code": "def decide(b): return None"}, headers=H("t1")),
+                         range(service.PER_DAY + 3)))
+    used = sorted(r.json()["evaluations_used_today"] for r in rs if r.status_code == 200)
+    assert used == list(range(1, service.PER_DAY + 1)) and len(calls) == service.PER_DAY
+
+
 def test_only_traders_submit(office):
     c, calls = office
     assert c.post("/evaluate", json={"code": "x"}, headers=H("m")).status_code == 409 and not calls

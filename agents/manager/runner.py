@@ -84,7 +84,8 @@ class Manager:
         STATE.mkdir(parents=True, exist_ok=True)
         st = json.loads((STATE / "runner.json").read_text()) if (STATE / "runner.json").exists() else {}
         self.last_seen = st.get("last_seen", 0)
-        self.last_turn = 0.0
+        self.last_turn = st.get("last_turn", 0.0)     # persisted: a restart is not a reason to wake
+        self.asleep_said = False
         self.model = model
         self.system = (HERE / "prompt.md").read_text()
         if BACKEND == "langchain":
@@ -160,7 +161,7 @@ class Manager:
             self.office.report("turn", result)
             self.office.report("agent_state", {"state": "idle"})
             self.last_seen = mark
-            (STATE / "runner.json").write_text(json.dumps({"last_seen": self.last_seen}))
+            (STATE / "runner.json").write_text(json.dumps({"last_seen": self.last_seen, "last_turn": self.last_turn}))
         return result
 
     def wake_reason(self) -> str | None:
@@ -184,7 +185,12 @@ class Manager:
                 if not reason or time.time() - self.last_turn < MIN_GAP_S:
                     continue
                 if BACKEND == "langchain" and self.office.budget()["left_usd"] < 0.01:
+                    # never silently: a message to the manager went unanswered for 40 min this way
+                    if not self.asleep_said:
+                        self.office.report("agent_state", {"state": "asleep", "why": f"model budget spent; missed: {reason}"})
+                        self.asleep_said = True
                     continue
+                self.asleep_said = False
                 r = self.turn(reason)
                 log(f"turn done in {r['secs']}s: {r['summary'][:150]!r} {r['error'] or ''}")
             except Exception as e:

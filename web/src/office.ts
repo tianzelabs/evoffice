@@ -257,6 +257,7 @@ export class OfficeScene extends Phaser.Scene {
     const a = this.actor(e.actor);
     if (!a) return;
     if (e.kind === "agent_state") {
+      if (p.state === "asleep" && live) a.say(`zZz — ${p.why ?? "asleep"}`);
       const on = p.state === "thinking";
       a.setThinking(on);
       if (on && live) a.walkTo(a.role === "manager" ? SPOTS.managerDesk : SPOTS.traderDesk);
