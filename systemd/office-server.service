@@ -6,6 +6,8 @@ After=network-online.target
 WorkingDirectory=%h/pixel-office-home/pixel-office
 Environment=OFFICE_DB=%h/pixel-office/office.db
 Environment=OFFICE_TOKENS=%h/pixel-office/tokens.json
+# the evaluator runs submitted strategies in throwaway containers (no network)
+Environment=DOCKER_HOST=unix:///run/user/1001/docker.sock
 # Tailscale address only: the office is reachable from the user's tailnet, not the internet.
 ExecStart=%h/pixel-office-home/pixel-office/.venv/bin/uvicorn server.app:app --host 100.86.90.65 --port 8710 --log-level info
 Restart=on-failure

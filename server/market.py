@@ -50,13 +50,18 @@ class ClickHouseMarket:
         return r.stdout.strip()
 
     def bars(self, pair: str, minutes: int) -> list[dict]:
-        """Closed 1-minute bars, oldest first. Minutes with no trade are absent, not filled."""
+        """Closed 1-minute bars, oldest first. Minutes with no trade are absent, not filled.
+        Capped at 7 days: what lies further back is the held-out window (server/evaluator)."""
+        return self.bars_between(pair, max(1, min(int(minutes), MAX_BARS_MINUTES)), 0)
+
+    def bars_between(self, pair: str, from_minutes_ago: int, to_minutes_ago: int) -> list[dict]:
+        """For the office's own use (the evaluator). Never exposed as a route."""
         if pair not in PAIRS:
             raise ValueError(f"unknown pair {pair!r}")
-        minutes = max(1, min(int(minutes), MAX_BARS_MINUTES))
+        a, b = int(from_minutes_ago), int(to_minutes_ago)
         sql = (f"SELECT toString(toStartOfMinute(ts)), argMin(price, ts), max(price), min(price), argMax(price, ts), "
                f"round(sum(qty), 6) FROM {self.database}.trades WHERE pair = '{pair}' "
-               f"AND ts >= toStartOfMinute(now()) - INTERVAL {minutes} MINUTE AND ts < toStartOfMinute(now()) "
+               f"AND ts >= toStartOfMinute(now()) - INTERVAL {a} MINUTE AND ts < toStartOfMinute(now()) - INTERVAL {b} MINUTE "
                f"GROUP BY toStartOfMinute(ts) ORDER BY toStartOfMinute(ts) FORMAT TSV")
         out = self._query(sql)
         rows = []
@@ -90,6 +95,9 @@ class FakeMarket:
         if self.stale or pair not in self.prices:
             raise Stale(f"{pair}: feed stale (fake)")
         return Quote(pair, self.prices[pair], 0.0)
+
+    def bars_between(self, pair: str, from_minutes_ago: int, to_minutes_ago: int) -> list[dict]:
+        return self.bars(pair, from_minutes_ago - to_minutes_ago)
 
     def bars(self, pair: str, minutes: int) -> list[dict]:
         p = self.prices.get(pair, 0.0)

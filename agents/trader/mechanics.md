@@ -32,6 +32,10 @@ Testing your own ideas
 - A pattern that looks good on data you have already looked at often fails on
   data you have not. Decide what you will test before you look; keep some recent
   data aside; prefer walk-forward over one split.
+- The office keeps 60 days you cannot fetch (the 60 days ending 7 days ago).
+  `evaluate(code)` runs your `decide(bars)` over them in a sandbox and returns
+  only totals: trades, net bps per trade with a 95% interval, hit rate. Five
+  tries a day. An interval that includes zero is not an edge.
 
 Jev (`jev(state, questions)`)
 - Returns typed answers with probabilities in ~0.4 s for ~$0.0001. Question

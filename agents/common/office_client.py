@@ -55,6 +55,9 @@ class Office:
     def close_position(self, position_id: int) -> dict:
         return self.post(f"/positions/{int(position_id)}/close")
 
+    def evaluate(self, code: str) -> dict:
+        return self.post("/evaluate", {"code": code})
+
     def jev(self, state, questions: dict) -> dict:
         r = self.post("/llm/api/alpha/decisions", {"model": "typesafe/jev-1.13", "state": state, "questions": questions})
         return r.get("answers", r)

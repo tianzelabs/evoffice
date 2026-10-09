@@ -84,9 +84,11 @@ class Runner:
             "say": {"tool": self._say, "description": "say(text, to=None): speak in the office chat; everyone sees it"},
             "jev": {"tool": self._jev, "description": "jev(state, questions): Jev typed judgement; questions = {id: {'type': 'noul'|'choice'|'score', 'instructions': str, 'criteria': ...}}"},
             "fetch_bars": {"tool": self._fetch_bars, "description": "fetch_bars(minutes): up to 7 days of 1-minute BTC/USD bars, oldest first"},
+            "evaluate": {"tool": self._evaluate, "description": "evaluate(code): score a strategy on 60 days you cannot see. code must define decide(bars) -> {'side': 'long'|'short'|None, 'hold_minutes': int}; it is called every 15 min with the previous 1440 bars. 5 tries a day; aggregates only"},
         }
         self.tool_sigs = {"open_position": "(side, size, max_hold_s=None)", "close_position": "(position_id)",
-                          "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)"}
+                          "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)",
+                          "evaluate": "(code)"}
         prologue = (HERE / "prompt.md").read_text() + "\n\n" + (HERE / "mechanics.md").read_text()
         self.rlm = RLM(backend="openai",
                        backend_kwargs={"model_name": MODEL, "base_url": self.office.url + "/llm/v1",
@@ -122,6 +124,12 @@ class Runner:
     def _jev(self, state, questions):
         try:
             return self.office.jev(state, questions)
+        except Refused as e:
+            return {"error": str(e)}
+
+    def _evaluate(self, code):
+        try:
+            return self.office.evaluate(str(code))
         except Refused as e:
             return {"error": str(e)}
 

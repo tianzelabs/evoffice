@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import leaderboard, positions
+from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
 from .store import Store
@@ -44,6 +45,10 @@ class Report(BaseModel):
     payload: dict
 
 
+class Evaluate(BaseModel):
+    code: str
+
+
 class Open(BaseModel):
     side: str
     size: float
@@ -53,7 +58,8 @@ class Open(BaseModel):
 
 
 def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: float = 10.0,
-               gateway: Gateway | None = None) -> FastAPI:
+               gateway: Gateway | None = None, eval_runner=None) -> FastAPI:
+    eval_runner = eval_runner or evaluation.docker_runner
     gateway = gateway or Gateway(store)
     for who in tokens.values():
         store.hire(who["id"], who["role"])
@@ -159,6 +165,14 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         if len(json.dumps(body.payload)) > 4000:
             raise HTTPException(413, "payload too large")
         return store.emit(w["id"], body.kind, body.payload)
+
+    @app.post("/evaluate")
+    async def evaluate(body: Evaluate, w: dict = Depends(who)):
+        """Score a strategy (code defining decide(bars)) on the held-out window. Aggregates only."""
+        try:
+            return await run_in_threadpool(evaluation.evaluate, store, market, w, body.code, eval_runner)
+        except evaluation.EvalRefused as e:
+            raise HTTPException(409, str(e))
 
     @app.get("/budget")
     def budgets():
