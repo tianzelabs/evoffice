@@ -22,6 +22,8 @@ function line(e: OfficeEvent): string | null {
   switch (e.kind) {
     case "say": return `${a}${p.to ? " → " + esc(displayName(p.to)) : ""}: ${esc(p.text)}`;
     case "name": return `<span class="sys">${esc(p.previous ?? e.actor)} is now called <b>${esc(p.name)}</b></span>`;
+    case "meeting": return `<span class="sys">— ${p.phase === "start" ? "daily stand-up begins at the meeting table" : "stand-up over"} —</span>`;
+    case "alert": return `<span class="neg"><b>⚠ market alert:</b> ${esc(p.text)}</span>`;
     case "level": return `<span class="sys">${a} reached level ${p.level}: <b>${esc(p.title)}</b> — size cap ${p.max_size} BTC</span>`;
     case "badge": return `<span class="sys">${a} earned a badge: 🏅 ${esc(p.title)}</span>`;
     case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} @ ${p.entry_px}</span>`;

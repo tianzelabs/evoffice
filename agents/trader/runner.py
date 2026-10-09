@@ -77,6 +77,7 @@ class Runner:
         self.bars: list[dict] = []
         self.chat_recent: list[dict] = []
         self.chat_new: list[dict] = []
+        self.news: list[str] = []            # the office's own calls: stand-ups and market alerts
         self.facts: dict[str, tuple[str, str, str]] = {}
         self.notes: list[str] = []
         self.last_trigger_error = None
@@ -265,6 +266,12 @@ class Runner:
             bar_note = f"+{len(new)} new bars since the last refresh"
         evs = self.office.events(self.last_seen)
         says = [e for e in evs if e["kind"] == "say"]
+        for e in evs:
+            if e["kind"] == "meeting" and e["payload"].get("phase") == "start":
+                self.news.append("daily stand-up at the meeting table: tell the manager (say to it) what you changed "
+                                 "since yesterday, what the evidence says, and what you will try next -- briefly")
+            elif e["kind"] == "alert":
+                self.news.append(f"MARKET ALERT: {e['payload'].get('text')} -- look at the market now")
         for e in says:
             self.chat_recent.append({"id": e["id"], "ts": e["ts"], "from": e["actor"], "to": e["payload"].get("to"),
                                      "text": e["payload"]["text"]})
@@ -339,6 +346,8 @@ class Runner:
             ms = (time.perf_counter() - t0) * 1000
             if ms > 2000:
                 self.notes.append(f"your should_wake took {ms:.0f} ms; it runs every minute, keep it fast")
+        if self.news:
+            reasons += self.news
         hb = self.heartbeat_s()
         if time.time() - self.last_turn >= hb:
             reasons.append(f"heartbeat (every {hb // 60} min)")
@@ -380,6 +389,7 @@ class Runner:
             log("turn failed:", err)
             traceback.print_exc()
         self.chat_new = []
+        self.news = []
         self.last_turn = time.time()
         own = mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs))
         v, names = strategy_version(self.ns, own)

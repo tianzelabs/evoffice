@@ -36,6 +36,10 @@ const placeAt = (x: number, y: number, plate: string): Place =>
 const TRADER_PLACES: Place[] = [placeAt(220, 360, "TRADER 1"), placeAt(500, 360, "TRADER 2")];
 const MANAGER_PLACE: Place = { ...placeAt(822, 300, "MANAGER"), visit: { x: 726, y: 296 } };
 const DOOR: Pt = { x: 660, y: 592 }, BOSS_SPOT: Pt = { x: 640, y: 470 };
+// seats around the meeting table (table spans x 378-522, y 468-564): the chair, then the sides
+const MEETING_SEATS: Record<string, Pt> = {
+  manager: { x: 450, y: 470 }, "trader-1": { x: 352, y: 540 }, "trader-2": { x: 548, y: 540 }, boss: { x: 450, y: 590 },
+};
 
 class Actor {
   sprite: Phaser.GameObjects.Image;
@@ -57,7 +61,8 @@ class Actor {
   }
 
   get pos(): Pt { return { x: this.sprite.x, y: this.sprite.y }; }
-  get home(): Pt { return this.place ? this.place.seat : DOOR; }
+  get home(): Pt { return this.meetingSeat ?? (this.place ? this.place.seat : DOOR); }
+  meetingSeat: Pt | null = null;
   get atHome(): boolean { return Math.abs(this.sprite.x - this.home.x) < 3 && Math.abs(this.sprite.y - this.home.y) < 3; }
 
   sync() {
@@ -149,6 +154,9 @@ export class OfficeScene extends Phaser.Scene {
   lamps: Phaser.GameObjects.Ellipse[] = [];
   clock!: Phaser.GameObjects.Text;
   tick = 0;
+  meeting = false;
+  alarm!: Phaser.GameObjects.Graphics;
+  alarmText?: Phaser.GameObjects.Text;
   nameOf: (id: string) => string = (id) => id;
   ready!: Promise<void>;
   private resolveReady!: () => void;
@@ -239,6 +247,7 @@ export class OfficeScene extends Phaser.Scene {
     this.add.text(660, 586, "ENTRANCE", TXT(9, "#6b5638")).setOrigin(0.5, 1).setDepth(-8);
     // night: the room darkens and desk lamps glow
     this.night = this.add.graphics().setDepth(9_000);
+    this.alarm = this.add.graphics().setDepth(9_002);
     this.paintSky();
   }
 
@@ -363,6 +372,19 @@ export class OfficeScene extends Phaser.Scene {
   // ---------- talking, by the rules of the room ----------
   converse(speaker: Actor, to: string | null, text: string) {
     const target = to ? this.actors[this.seat(to)] : undefined;
+    if (this.meeting && speaker.role !== "boss") {          // already face to face at the table
+      speaker.then(async () => { if (target) speaker.face(target.pos); await speaker.say(text); });
+      return;
+    }
+    if (this.meeting && speaker.role === "boss") {
+      speaker.then(async () => {
+        if (!this.bossPresent()) { speaker.sprite.setPosition(DOOR.x, DOOR.y); await speaker.fade(1); }
+        speaker.meetingSeat = MEETING_SEATS.boss;
+        await speaker.walkTo(MEETING_SEATS.boss);
+        await speaker.say(text);
+      });
+      return;
+    }
     if (speaker.role === "boss") {
       speaker.then(async () => {
         if (!this.bossPresent()) { speaker.sprite.setPosition(DOOR.x, DOOR.y); await speaker.fade(1); }
@@ -421,6 +443,8 @@ export class OfficeScene extends Phaser.Scene {
     if (e.actor === "office") return;
     const a = this.actor(e.actor);
     if (!a) return;
+    if (e.kind === "meeting") { this.setMeeting(p.phase === "start", live); return; }
+    if (e.kind === "alert") { if (live) this.soundAlarm(p.text ?? "MARKET ALERT"); return; }
     if (e.kind === "agent_state") {
       a.setThinking(p.state === "thinking");
       if (p.state === "asleep" && live) a.then(() => a.say(`zZz — ${p.why ?? "asleep"}`));
@@ -452,6 +476,36 @@ export class OfficeScene extends Phaser.Scene {
         break;
       }
     }
+  }
+
+  // ---------- the stand-up and the alarm ----------
+  setMeeting(on: boolean, live: boolean) {
+    this.meeting = on;
+    for (const [seat, a] of Object.entries(this.actors)) {
+      if (!a || seat === "boss") continue;
+      a.meetingSeat = on ? (MEETING_SEATS[seat] ?? MEETING_SEATS["trader-1"]) : null;
+      if (live) a.then(() => a.walkTo(a.home));
+      else { a.sprite.setPosition(a.home.x, a.home.y); a.sync(); }
+    }
+    const boss = this.actors.boss;
+    if (!on && boss && this.bossPresent()) {
+      boss.meetingSeat = null;
+      if (live) boss.then(async () => { await boss.walkTo(DOOR); await boss.fade(0); });
+    }
+    if (live && on) this.float({ x: 450, y: 440 }, "DAILY STAND-UP", "#1a5fb4");
+  }
+
+  soundAlarm(text: string) {
+    this.alarmText?.destroy();
+    this.alarmText = this.add.text(457, 100, `⚠ ${text}`, TXT(12, "#ffffff", { backgroundColor: "#c62828", padding: { x: 6, y: 3 } }))
+      .setOrigin(0.5, 1).setDepth(9_003);
+    let n = 0;
+    const flash = this.time.addEvent({ delay: 400, repeat: 40, callback: () => {
+      n++;
+      this.alarm.clear();
+      if (n % 2) this.alarm.fillStyle(0xff2020, 0.12).fillRect(0, 0, W, H).fillStyle(0xff3030, 0.9).fillCircle(940, 18, 7);
+      if (n >= 40) { this.alarm.clear(); this.alarmText?.destroy(); this.alarmText = undefined; flash.remove(); }
+    } });
   }
 
   // ---------- screens ----------

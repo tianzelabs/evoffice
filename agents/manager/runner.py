@@ -46,7 +46,7 @@ FIVE_HOUR_PAUSE = 85.0
 WEEKLY_FLOOR = 0.10                    # always allow the account's week to reach 10%
 QUIET = {"agent_state", "spend"}
 # what wakes the manager besides the boss and messages to it; only when tokens are free
-TRADER_NEWS = {"evaluation", "close", "version", "fire", "say"} if BACKEND == "codex" else set()
+TRADER_NEWS = {"evaluation", "close", "version", "fire", "say", "meeting", "alert", "level"} if BACKEND == "codex" else {"meeting"}
 
 CODEX_DUTIES = """
 How the boss wants you to spend your time (it is cheap now -- use it):
@@ -66,8 +66,12 @@ How the boss wants you to spend your time (it is cheap now -- use it):
 4. KEEP THEM TRADING SMALL. A frozen hypothesis tested with a few small live paper
    trades (0.005 BTC) produces evidence nothing else can: the future is data nobody has
    seen. Encourage that over endless argument on visible data.
-5. About every 6 hours (track it in your notes), a 3-5 line stand-up for the boss: what
-   the market is doing, what your models say, what each trader is trying.
+5. THE DAILY STAND-UP (a `meeting` event): you chair it at the meeting table. Open it
+   with the market picture from your models (say it to everyone); when the traders have
+   reported, close with a 3-5 line summary addressed to the boss: what the market is
+   doing, what your models say, what each trader changed and what the evidence shows.
+6. MARKET ALERTS (an `alert` event): look at the move with your models and tell the
+   traders, in one message to everyone, what it means and what is worth watching.
 
 Each message to a trader wakes it and spends its own budget ($0.30/day). Put
 everything for one trader into one message; the office lets you message the same
@@ -251,8 +255,9 @@ class Manager:
                 continue
             if e["kind"] == "say" and (e["actor"] == "boss" or e["payload"].get("to") == self.me):
                 return f"a message from {e['actor']}"
-            if e["kind"] in TRADER_NEWS:
-                return f"{e['actor']}: {e['kind']}"
+            if e["kind"] in TRADER_NEWS and not (e["kind"] == "meeting" and e["payload"].get("phase") == "end"):
+                detail = e["payload"].get("text") or e["payload"].get("phase") or ""
+                return f"{e['actor']}: {e['kind']} {detail}".strip()
         hb, why = self.pace()
         self.pace_note = why
         if time.time() - self.last_turn >= hb:

@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import iterations, leaderboard, names, positions, progress, staff
+from . import iterations, leaderboard, names, positions, progress, scheduler, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
@@ -88,6 +88,7 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             while True:
                 await asyncio.sleep(backstop_every_s)
                 await run_in_threadpool(positions.enforce_max_hold, store, market)
+                await run_in_threadpool(scheduler.tick, store, market)      # stand-up and market alerts
         task = asyncio.create_task(backstop()) if backstop_every_s > 0 else None
         yield
         if task:
