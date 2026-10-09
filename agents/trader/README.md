@@ -17,6 +17,9 @@ host). Model: claude-haiku-5.5 (spike 2).
 | `watcher.py` | always-on, **no model calls**: evaluates the trader's own trigger functions on live prices and wakes the RLM |
 | `repl_bootstrap.py` | what a fresh REPL starts with: `class` re-enabled, the office tools (open/close/say/jev), shared mechanics; ledger and recent chat as variables |
 | `prompt.md` | the trader's starting instructions |
+| `mechanics.md` | shared, measured mechanics (fees, horizon, volatility clustering, how to use Jev) -- no strategy |
+| `version.py` | the strategy version: a hash of the trader's own functions, classes and fitted models |
+| `Dockerfile` | the container: rlms, dill, numpy, pandas, scikit-learn; code mounted read-only, objects in `/state` |
 
 ## How it is awake
 

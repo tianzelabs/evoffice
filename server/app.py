@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import leaderboard, positions
+from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
 from .store import Store
 
@@ -35,6 +36,14 @@ class Say(BaseModel):
     to: str | None = None
 
 
+REPORTABLE = {"wake", "version", "agent_state", "turn"}   # what an agent may say about itself
+
+
+class Report(BaseModel):
+    kind: str
+    payload: dict
+
+
 class Open(BaseModel):
     side: str
     size: float
@@ -43,7 +52,9 @@ class Open(BaseModel):
     max_hold_s: int | None = Field(default=None, gt=0)
 
 
-def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: float = 10.0) -> FastAPI:
+def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: float = 10.0,
+               gateway: Gateway | None = None) -> FastAPI:
+    gateway = gateway or Gateway(store)
     for who in tokens.values():
         store.hire(who["id"], who["role"])
 
@@ -132,6 +143,44 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     @app.get("/leaderboard")
     def board():
         return leaderboard.standings(store)
+
+    @app.get("/bars")
+    async def bars(minutes: int = 60, pair: str = "BTC/USD"):
+        try:
+            return await run_in_threadpool(market.bars, pair, minutes)
+        except (Stale, ValueError) as e:
+            raise HTTPException(503, str(e))
+
+    @app.post("/report")
+    def report(body: Report, w: dict = Depends(who)):
+        """An agent reporting on itself (woke, new strategy version, what it is doing). Never about others."""
+        if body.kind not in REPORTABLE:
+            raise HTTPException(422, f"kind must be one of {sorted(REPORTABLE)}")
+        if len(json.dumps(body.payload)) > 4000:
+            raise HTTPException(413, "payload too large")
+        return store.emit(w["id"], body.kind, body.payload)
+
+    @app.get("/budget")
+    def budgets():
+        return [budget(store, r) for r in ("trader", "manager")]
+
+    @app.get("/budget/me")
+    def my_budget(w: dict = Depends(who)):
+        return budget(store, w["role"])
+
+    async def _llm(route: str, request: Request, w: dict):
+        try:
+            return await run_in_threadpool(gateway.forward, w, route, await request.json())
+        except GatewayRefused as e:
+            raise HTTPException(e.status, str(e))
+
+    @app.post("/llm/v1/chat/completions")
+    async def llm_chat(request: Request, w: dict = Depends(who)):
+        return await _llm("chat", request, w)
+
+    @app.post("/llm/api/alpha/decisions")
+    async def llm_decisions(request: Request, w: dict = Depends(who)):
+        return await _llm("decisions", request, w)
 
     return app
 

@@ -40,6 +40,8 @@
 <header>
   <h1>Pixel Office</h1>
   <span>BTC/USD <span id="price">…</span></span>
+  <span class="muted" id="states"></span>
+  <span class="muted" id="budget"></span>
   <span class="muted" id="me">not signed in</span>
 </header>
 <main>
@@ -62,7 +64,7 @@
 const $ = (s) => document.querySelector(s);
 let token = null;
 try { token = localStorage.getItem("office-token"); } catch (e) {}
-const roleOf = {};
+const roleOf = {}, states = {};
 
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
 function cls(actor) { const r = roleOf[actor] || (actor === "office" ? "office" : actor.startsWith("trader") ? "trader" : actor); return "who-" + r; }
@@ -74,13 +76,19 @@ function line(ev) {
     case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} ${esc(p.pair)} @ ${p.entry_px}</span>`;
     case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}) @ ${p.exit_px} · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span>, fees ${p.fees}</span>`;
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
+    case "wake": return `<span class="sys">${a} woke: ${esc((p.reasons || []).join("; "))}</span>`;
+    case "version": return `<span class="sys">${a} changed strategy → version ${esc(p.version || "none")} (${esc((p.objects || []).join(", "))})</span>`;
+    case "spend": case "agent_state": case "turn": return null;
     default: return `<span class="sys">${a} ${esc(ev.kind)} ${esc(JSON.stringify(p))}</span>`;
   }
 }
 function add(ev) {
   if (ev.kind === "hire") roleOf[ev.payload.employee] = ev.payload.role;
+  if (ev.kind === "agent_state") { states[ev.actor] = ev.payload.state; $("#states").textContent = Object.entries(states).map(([k, v]) => `${k}: ${v}`).join(" · "); }
+  if (ev.kind === "spend") budget();
+  const html = line(ev); if (html === null) return;
   const d = document.createElement("div"); d.className = "ev";
-  d.innerHTML = `<span class="t">${ev.ts.slice(11, 19)}</span>${line(ev)}`;
+  d.innerHTML = `<span class="t">${ev.ts.slice(11, 19)}</span>${html}`;
   const log = $("#log"), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.appendChild(d); if (atBottom) log.scrollTop = log.scrollHeight;
   if (ev.kind === "close" || ev.kind === "open") board();
@@ -99,6 +107,9 @@ async function price() {
   try { const r = await fetch("/price"); const p = await r.json(); $("#price").textContent = r.ok ? p.price.toFixed(1) : "feed stale"; }
   catch (e) { $("#price").textContent = "offline"; }
 }
+async function budget() {
+  try { const b = await (await fetch("/budget")).json(); $("#budget").textContent = "budget today " + b.map((x) => `${x.role} $${x.spent_usd.toFixed(3)}/${x.cap_usd.toFixed(2)}`).join(" · "); } catch (e) {}
+}
 async function whoami() {
   if (!token) return;
   const r = await fetch("/me", {headers: {Authorization: "Bearer " + token}});
@@ -116,7 +127,7 @@ $("#say").onsubmit = async (e) => {
   const r = await fetch("/say", {method: "POST", headers: {"Content-Type": "application/json", Authorization: "Bearer " + token}, body: JSON.stringify({text})});
   if (r.ok) $("#text").value = ""; else if (r.status === 401) { token = null; try { localStorage.removeItem("office-token"); } catch (e) {} }
 };
-board(); price(); whoami();
+board(); price(); whoami(); budget();
 setInterval(price, 5000); setInterval(board, 30000);
 </script>
 </body>

@@ -29,25 +29,48 @@ class Quote:
     age_s: float
 
 
+PAIRS = ("BTC/USD", "ETH/USD", "SOL/USD")
+MAX_BARS_MINUTES = 7 * 24 * 60
+
+
 class ClickHouseMarket:
     """Shells out to clickhouse-client, as the rest of agent-world does, rather
-    than taking a driver dependency for one scalar read."""
+    than taking a driver dependency for a few small reads."""
 
-    def __init__(self, database: str = "traderme", timeout: int = 10):
+    def __init__(self, database: str = "traderme", timeout: int = 20):
         self.database, self.timeout = database, timeout
 
-    def quote(self, pair: str) -> Quote:
-        if pair not in ("BTC/USD", "ETH/USD", "SOL/USD"):
-            raise ValueError(f"unknown pair {pair!r}")   # pairs are ours; never interpolate input
-        sql = (f"SELECT price, dateDiff('millisecond', ts, now64(6)) / 1000.0 "
-               f"FROM {self.database}.trades WHERE pair = '{pair}' ORDER BY ts DESC LIMIT 1 FORMAT TSV")
+    def _query(self, sql: str) -> str:
         env = dict(os.environ)
         env.setdefault("CLICKHOUSE_PASSWORD", "clickhouse")
         r = subprocess.run(["clickhouse-client", "--query", sql], capture_output=True, text=True,
                            timeout=self.timeout, env=env)
         if r.returncode != 0:
             raise Stale(f"clickhouse-client failed: {(r.stderr or '').strip()[:200]}")
-        out = r.stdout.strip()
+        return r.stdout.strip()
+
+    def bars(self, pair: str, minutes: int) -> list[dict]:
+        """Closed 1-minute bars, oldest first. Minutes with no trade are absent, not filled."""
+        if pair not in PAIRS:
+            raise ValueError(f"unknown pair {pair!r}")
+        minutes = max(1, min(int(minutes), MAX_BARS_MINUTES))
+        sql = (f"SELECT toString(toStartOfMinute(ts)), argMin(price, ts), max(price), min(price), argMax(price, ts), "
+               f"round(sum(qty), 6) FROM {self.database}.trades WHERE pair = '{pair}' "
+               f"AND ts >= toStartOfMinute(now()) - INTERVAL {minutes} MINUTE AND ts < toStartOfMinute(now()) "
+               f"GROUP BY toStartOfMinute(ts) ORDER BY toStartOfMinute(ts) FORMAT TSV")
+        out = self._query(sql)
+        rows = []
+        for line in out.splitlines():
+            m, o, h, l, c, v = line.split("\t")
+            rows.append({"m": m, "o": float(o), "h": float(h), "l": float(l), "c": float(c), "v": float(v)})
+        return rows
+
+    def quote(self, pair: str) -> Quote:
+        if pair not in PAIRS:
+            raise ValueError(f"unknown pair {pair!r}")   # pairs are ours; never interpolate input
+        sql = (f"SELECT price, dateDiff('millisecond', ts, now64(6)) / 1000.0 "
+               f"FROM {self.database}.trades WHERE pair = '{pair}' ORDER BY ts DESC LIMIT 1 FORMAT TSV")
+        out = self._query(sql)
         if not out:
             raise Stale(f"no trades for {pair}")
         price_s, age_s = out.split("\t")
@@ -67,3 +90,7 @@ class FakeMarket:
         if self.stale or pair not in self.prices:
             raise Stale(f"{pair}: feed stale (fake)")
         return Quote(pair, self.prices[pair], 0.0)
+
+    def bars(self, pair: str, minutes: int) -> list[dict]:
+        p = self.prices.get(pair, 0.0)
+        return [{"m": f"2026-01-01 00:{i % 60:02d}:00", "o": p, "h": p, "l": p, "c": p, "v": 1.0} for i in range(minutes)]
