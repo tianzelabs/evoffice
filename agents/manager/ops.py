@@ -50,11 +50,40 @@ def all_events(office: Office, since: int = 0) -> list[dict]:
         since = evs[-1]["id"]
 
 
-def say(office: Office, text: str, to: str | None = None) -> str:
+MIN_GAP_TO_TRADER_S = 3600
+
+
+def say(office: Office, text: str, to: str | None = None, urgent: bool = False) -> str:
+    """Each message to a trader wakes it and spends ITS budget, so the manager may message the same
+    trader at most once an hour unless urgent (the manager runs on a subscription; the traders pay)."""
+    if to and to.startswith("trader") and not urgent:
+        import json as _j
+        import time as _t
+        sent = _state() / "last_message_to.json"
+        last = _j.loads(sent.read_text()) if sent.exists() else {}
+        ago = _t.time() - last.get(to, 0)
+        if ago < MIN_GAP_TO_TRADER_S:
+            return (f"not sent: you messaged {to} {int(ago // 60)} min ago. Batch it into your next message "
+                    f"(in {int((MIN_GAP_TO_TRADER_S - ago) // 60)} min), or resend with urgent if it cannot wait.")
     if DRY:
-        return _dry({"say": text, "to": to})
+        return _dry({"say": text, "to": to, "urgent": urgent})
     r = _safe(lambda: office.say(text[:2000], to))
-    return "said" if "error" not in r else r["error"]
+    if "error" in r:
+        return r["error"]
+    if to and to.startswith("trader"):
+        import json as _j
+        import time as _t
+        sent = _state() / "last_message_to.json"
+        last = _j.loads(sent.read_text()) if sent.exists() else {}
+        last[to] = _t.time()
+        sent.write_text(_j.dumps(last))
+    return "said"
+
+
+def set_name(office: Office, name: str) -> str:
+    if DRY:
+        return _dry({"name": name})
+    return json.dumps(_safe(lambda: office.post("/me/name", {"name": name})), ensure_ascii=False)
 
 
 def read_recent_chat(office: Office, n: int = 30) -> str:

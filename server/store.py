@@ -25,6 +25,13 @@ class Store:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA.read_text())
         self.lock = threading.RLock()
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Additive columns for databases created before them. Never drops or rewrites anything."""
+        cols = {r["name"] for r in self.q("PRAGMA table_info(employees)")}
+        if "name" not in cols:
+            self.x("ALTER TABLE employees ADD COLUMN name TEXT")   # chosen by the agent itself
 
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:

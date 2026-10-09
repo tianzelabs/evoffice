@@ -29,9 +29,9 @@ def standings(store: Store) -> dict:
     open_n = {r["employee_id"]: r["n"] for r in store.q(
         "SELECT employee_id, COUNT(*) AS n FROM positions WHERE closed_ts IS NULL GROUP BY employee_id")}
     by_employee = []
-    for e in store.q("SELECT id, fired_ts FROM employees WHERE role = 'trader'"):
+    for e in store.q("SELECT id, name, fired_ts FROM employees WHERE role = 'trader'"):
         a = agg.get(e["id"], {})
-        by_employee.append({"employee": e["id"], "fired": e["fired_ts"] is not None,
+        by_employee.append({"employee": e["id"], "name": e["name"], "fired": e["fired_ts"] is not None,
                             "open_positions": open_n.get(e["id"], 0), "trades": a.get("trades", 0),
                             "net_pnl": a.get("net_pnl", 0.0), "avg_net_bps": a.get("avg_net_bps"),
                             "win_rate": a.get("win_rate"), "fees_paid": a.get("fees_paid", 0.0),

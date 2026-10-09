@@ -2,7 +2,7 @@
 import * as Phaser from "phaser";
 import { allEvents, getJSON, stream } from "./net";
 import { OfficeScene, W, H } from "./office";
-import { addToLog, initPanel, refreshBoard, refreshBudget, refreshIterations, setPrice } from "./panel";
+import { addToLog, displayName, initPanel, learnNames, refreshBoard, refreshBudget, refreshIterations, setPrice } from "./panel";
 import "./style.css";
 
 const scene = new OfficeScene();
@@ -25,6 +25,8 @@ async function market() {
 (async () => {
   await initPanel();
   await scene.ready;
+  try { learnNames(await getJSON("/employees")); } catch { /* offline: ids until names arrive */ }
+  scene.nameOf = displayName;
   const history = await allEvents();
   for (const e of history) { scene.apply(e, false); addToLog(e); }
   const last = history.length ? history[history.length - 1].id : 0;

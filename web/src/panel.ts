@@ -5,16 +5,23 @@ import { getJSON, OfficeEvent, sayAsBoss, whoami } from "./net";
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const roleOf: Record<string, string> = {};
+const nameOf: Record<string, string> = {};        // employee id -> the name it chose for itself
+
+export const displayName = (id: string) => nameOf[id] ?? id;
+export function learnNames(employees: { id: string; name?: string | null; role: string }[]) {
+  employees.forEach((e) => { if (e.name) nameOf[e.id] = e.name; roleOf[e.id] = e.role; });
+}
 
 function who(actor: string) {
   const r = roleOf[actor] ?? (actor === "office" ? "office" : actor.startsWith("trader") ? "trader" : actor);
-  return `<span class="who-${r}">${esc(actor)}</span>`;
+  return `<span class="who-${r}" title="${esc(actor)}">${esc(displayName(actor))}</span>`;
 }
 
 function line(e: OfficeEvent): string | null {
   const p = e.payload, a = who(e.actor);
   switch (e.kind) {
-    case "say": return `${a}${p.to ? " → " + esc(p.to) : ""}: ${esc(p.text)}`;
+    case "say": return `${a}${p.to ? " → " + esc(displayName(p.to)) : ""}: ${esc(p.text)}`;
+    case "name": return `<span class="sys">${esc(p.previous ?? e.actor)} is now called <b>${esc(p.name)}</b></span>`;
     case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} @ ${p.entry_px}</span>`;
     case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}) · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span></span>`;
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
@@ -30,6 +37,7 @@ function line(e: OfficeEvent): string | null {
 
 export function addToLog(e: OfficeEvent) {
   if (e.kind === "hire") roleOf[e.payload.employee] = e.payload.role;
+  if (e.kind === "name") nameOf[e.payload.employee] = e.payload.name;
   if (e.kind === "say" && e.payload.role) roleOf[e.actor] = e.payload.role;
   const html = line(e);
   if (html === null) return;
@@ -46,9 +54,9 @@ export async function refreshBoard() {
   const n = (x: unknown) => (x == null ? "–" : String(x));
   const sign = (x: number | null) => (x == null ? "" : x >= 0 ? "pos" : "neg");
   $("#board tbody").innerHTML = b.by_employee.map((r: any) =>
-    `<tr><td>${esc(r.employee)}${r.fired ? " ✝" : ""}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${n(r.net_pnl)}</td><td>${n(r.avg_net_bps)}</td><td>${r.open_positions}</td></tr>`).join("");
+    `<tr><td title="${esc(r.employee)}">${esc(displayName(r.employee))}${r.fired ? " ✝" : ""}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${n(r.net_pnl)}</td><td>${n(r.avg_net_bps)}</td><td>${r.open_positions}</td></tr>`).join("");
   $("#versions tbody").innerHTML = b.by_version.map((r: any) =>
-    `<tr><td>${esc(r.employee)} · ${esc(String(r.strategy_version).slice(0, 8))}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${r.net_pnl}</td><td>${n(r.avg_net_bps)}</td></tr>`).join("") ||
+    `<tr><td>${esc(displayName(r.employee))} · ${esc(String(r.strategy_version).slice(0, 8))}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${r.net_pnl}</td><td>${n(r.avg_net_bps)}</td></tr>`).join("") ||
     `<tr><td colspan="4" class="muted">no closed positions yet</td></tr>`;
   return b;
 }
@@ -105,7 +113,7 @@ export async function refreshIterations() {
       const ev = v.evaluations.map((e: any) => e.net_bps_per_trade == null ? "err" : `${e.net_bps_per_trade}`).join(", ");
       return `<tr><td>${esc(v.version ? v.version.slice(0, 8) : "(no strategy)")}</td><td>${v.since ? esc(v.since.slice(5, 16).replace("T", " ")) : ""}</td><td title="${esc(v.objects.join(", "))}">${v.objects.length}</td><td>${ev || "–"}</td><td>${v.live.trades ?? 0}</td></tr>`;
     }).join("");
-    return `<div class="iter"><div><b>${esc(trader)}</b> · ${s.versions} versions · ${s.evaluations} held-out tests · ${verdict}</div>
+    return `<div class="iter"><div><b title="${esc(trader)}">${esc(displayName(trader))}</b> · ${s.versions} versions · ${s.evaluations} held-out tests · ${verdict}</div>
       ${chart(t.evaluations)}
       <div class="scroll-x"><table><thead><tr><th>version</th><th>since</th><th>obj</th><th>held-out bps</th><th>live</th></tr></thead><tbody>${rows || `<tr><td colspan="5" class="muted">no versions yet</td></tr>`}</tbody></table></div></div>`;
   }).join("") || `<div class="muted">no traders</div>`;

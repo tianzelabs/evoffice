@@ -6,7 +6,8 @@
     office activity TRADER [N]           a trader's turns, versions, evaluations, wake reasons
     office positions TRADER              a trader's positions
     office market [MINUTES]              BTC price and recent 1-minute bars
-    office say TEXT [--to WHO]           speak in the public chat
+    office say TEXT [--to WHO] [--urgent]  speak in the public chat (to a trader: at most once an hour)
+    office name NAME                     choose your own name
     office params TRADER --reason R [--heartbeat-min N] [--max-size X] [--max-hold-min N]
     office fire TRADER --reason R        fire a trader (rarely)
     office notes [--set TEXT]            read, or replace, your private notes
@@ -28,8 +29,9 @@ def main(argv: list[str]) -> str:
     sub.add_parser("employees")
     a = sub.add_parser("activity"); a.add_argument("trader"); a.add_argument("n", nargs="?", type=int, default=10)
     p = sub.add_parser("positions"); p.add_argument("trader")
-    m = sub.add_parser("market"); m.add_argument("minutes", nargs="?", type=int, default=120)
-    s = sub.add_parser("say"); s.add_argument("text"); s.add_argument("--to")
+    m = sub.add_parser("market"); m.add_argument("minutes", nargs="?", type=int, default=120)   # up to 10080 (7 days)
+    s = sub.add_parser("say"); s.add_argument("text"); s.add_argument("--to"); s.add_argument("--urgent", action="store_true")
+    nm = sub.add_parser("name"); nm.add_argument("name")
     pr = sub.add_parser("params"); pr.add_argument("trader"); pr.add_argument("--reason", required=True)
     pr.add_argument("--heartbeat-min", type=int); pr.add_argument("--max-size", type=float); pr.add_argument("--max-hold-min", type=int)
     f = sub.add_parser("fire"); f.add_argument("trader"); f.add_argument("--reason", required=True)
@@ -42,7 +44,8 @@ def main(argv: list[str]) -> str:
     if args.cmd == "activity": return ops.trader_activity(o, args.trader, args.n)
     if args.cmd == "positions": return ops.trader_positions(o, args.trader)
     if args.cmd == "market": return ops.market(o, args.minutes)
-    if args.cmd == "say": return ops.say(o, args.text, args.to)
+    if args.cmd == "say": return ops.say(o, args.text, args.to, args.urgent)
+    if args.cmd == "name": return ops.set_name(o, args.name)
     if args.cmd == "params":
         return ops.set_trader_params(o, args.trader, args.reason, args.heartbeat_min, args.max_size, args.max_hold_min)
     if args.cmd == "fire": return ops.fire_trader(o, args.trader, args.reason)

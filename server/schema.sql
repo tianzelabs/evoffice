@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS employees (
     role      TEXT NOT NULL CHECK (role IN ('boss', 'manager', 'trader')),
     hired_ts  TEXT NOT NULL,
     fired_ts  TEXT,
-    params    TEXT NOT NULL DEFAULT '{}'
+    params    TEXT NOT NULL DEFAULT '{}',
+    name      TEXT                      -- chosen by the agent itself (POST /me/name)
 );
 
 -- A position is opened and closed by the trader itself. max_hold_s is only a

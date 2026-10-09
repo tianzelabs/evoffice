@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import iterations, leaderboard, positions, staff
+from . import iterations, leaderboard, names, positions, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
@@ -56,6 +56,10 @@ class Params(BaseModel):
 
 class Fire(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+
+
+class Name(BaseModel):
+    name: str
 
 
 class Evaluate(BaseModel):
@@ -193,6 +197,13 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         if len(json.dumps(body.payload)) > 4000:
             raise HTTPException(413, "payload too large")
         return store.emit(w["id"], body.kind, body.payload)
+
+    @app.post("/me/name")
+    def name_me(body: Name, w: dict = Depends(who)):
+        try:
+            return names.set_name(store, w, body.name)
+        except names.NameRefused as e:
+            raise HTTPException(409, str(e))
 
     @app.get("/employees")
     def employees():

@@ -147,6 +147,7 @@ export class OfficeScene extends Phaser.Scene {
   lamps: Phaser.GameObjects.Ellipse[] = [];
   clock!: Phaser.GameObjects.Text;
   tick = 0;
+  nameOf: (id: string) => string = (id) => id;
   ready!: Promise<void>;
   private resolveReady!: () => void;
 
@@ -313,8 +314,8 @@ export class OfficeScene extends Phaser.Scene {
     const place = this.placeOf(seat);
     if (!place) return undefined;
     const role = seat === "manager" ? "manager" : "trader";
-    const a = new Actor(this, role, employee, place, PEOPLE_FRAME[seat] ?? 0, place.seat);
-    if (place.plate.startsWith("TRADER")) this.plates[place.plate]?.setText(employee.toUpperCase());
+    const a = new Actor(this, role, this.nameOf(employee), place, PEOPLE_FRAME[seat] ?? 0, place.seat);
+    this.plates[place.plate]?.setText(this.nameOf(employee).toUpperCase());
     return (this.actors[seat] = a);
   }
 
@@ -362,18 +363,27 @@ export class OfficeScene extends Phaser.Scene {
   apply(e: OfficeEvent, live: boolean) {
     const p = e.payload;
     if (e.kind === "hire") { this.seat(p.employee); if (p.role !== "boss") this.actor(p.employee); return; }
+    if (e.kind === "name") {
+      const a = this.actor(p.employee);
+      if (a) {
+        a.rename(p.name);
+        if (a.place) this.plates[a.place.plate]?.setText(String(p.name).toUpperCase());
+        if (live) this.float(this.over(a), `I'm ${p.name}`, "#1a5fb4");
+      }
+      return;
+    }
     if (e.kind === "fire") {
       this.seatOf[p.successor] = this.seat(p.employee);
       const a = this.actor(p.employee);
       if (!a) return;
       const plate = a.place?.plate;
-      if (!live) { a.rename(p.successor); if (plate) this.plates[plate]?.setText(p.successor.toUpperCase()); return; }
+      if (!live) { a.rename(this.nameOf(p.successor)); if (plate) this.plates[plate]?.setText(this.nameOf(p.successor).toUpperCase()); return; }
       a.then(async () => {
         this.float(this.over(a), "FIRED", "#c62828");
         await a.say(`fired: ${p.reason}`);
         await a.walkTo(DOOR); await a.fade(0);
-        a.rename(p.successor);
-        if (plate) this.plates[plate]?.setText(p.successor.toUpperCase());
+        a.rename(this.nameOf(p.successor));
+        if (plate) this.plates[plate]?.setText(this.nameOf(p.successor).toUpperCase());
         await a.fade(1);
         await a.walkTo(a.home);
         await a.say("Hi, I'm new here.");
@@ -406,7 +416,7 @@ export class OfficeScene extends Phaser.Scene {
         const target = this.actors[this.seat(p.employee)];
         a.then(async () => {
           if (target?.place) { await a.walkTo(target.place.visit); a.face(target.pos); }
-          await a.say(`New limits for ${p.employee}: ${JSON.stringify(p.changes)}${p.reason ? " — " + p.reason : ""}`);
+          await a.say(`New limits for ${this.nameOf(p.employee)}: ${JSON.stringify(p.changes)}${p.reason ? " — " + p.reason : ""}`);
           await a.walkTo(a.home);
         });
         break;
@@ -448,7 +458,7 @@ export class OfficeScene extends Phaser.Scene {
 
   setBoard(board: any) {
     const rows = board.by_employee.slice(0, 5).map((r: any) =>
-      `${r.employee.padEnd(11)} ${String(r.trades).padStart(3)}t ${String(r.net_pnl ?? 0).padStart(9)} ${r.avg_net_bps == null ? "" : r.avg_net_bps + "bps"}`);
+      `${String(r.name ?? r.employee).slice(0, 11).padEnd(11)} ${String(r.trades).padStart(3)}t ${String(r.net_pnl ?? 0).padStart(9)} ${r.avg_net_bps == null ? "" : r.avg_net_bps + "bps"}`);
     this.screenText.setText(rows.join("\n") || "no traders");
   }
 }

@@ -87,11 +87,12 @@ class Runner:
             "say": {"tool": self._say, "description": "say(text, to=None): speak in the office chat; everyone sees it"},
             "jev": {"tool": self._jev, "description": "jev(state, questions): Jev typed judgement; questions = {id: {'type': 'noul'|'choice'|'score', 'instructions': str, 'criteria': ...}}"},
             "fetch_bars": {"tool": self._fetch_bars, "description": "fetch_bars(minutes): up to 7 days of 1-minute BTC/USD bars, oldest first"},
+            "set_name": {"tool": self._set_name, "description": "set_name(name): choose your own name (shown everywhere instead of your id)"},
             "evaluate": {"tool": self._evaluate, "description": "evaluate(code): score a strategy on 60 days you cannot see. code must define decide(bars) -> {'side': 'long'|'short'|None, 'hold_minutes': int}; it is called every 15 min with the previous 1440 bars. 5 tries a day; aggregates only"},
         }
         self.tool_sigs = {"open_position": "(side, size, max_hold_s=None)", "close_position": "(position_id)",
                           "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)",
-                          "evaluate": "(code)"}
+                          "evaluate": "(code)", "set_name": "(name)"}
         prologue = (HERE / "prompt.md").read_text() + "\n\n" + (HERE / "mechanics.md").read_text()
         self.rlm = RLM(backend="openai",
                        backend_kwargs={"model_name": MODEL, "base_url": self.office.url + "/llm/v1",
@@ -137,6 +138,12 @@ class Runner:
     def _jev(self, state, questions):
         try:
             return self.office.jev(state, questions)
+        except Refused as e:
+            return {"error": str(e)}
+
+    def _set_name(self, name):
+        try:
+            return self.office.set_name(str(name))
         except Refused as e:
             return {"error": str(e)}
 
@@ -277,6 +284,8 @@ class Runner:
         except Refused as e:
             px = {"error": str(e)}
         budget = self.office.budget()
+        staff = self.office.get("/employees")
+        self.my_name = next((e.get("name") for e in staff if e["id"] == self.me), None)
         evals = [{"ts": e["ts"][:19], **e["payload"]} for e in self._my_events("evaluation")][-5:]
         facts = {
             "bars_1m": (list(self.bars), "BTC/USD closed 1-minute bars, oldest first; keys m (UTC minute), o, h, l, c, v", bar_note),
@@ -286,6 +295,8 @@ class Runner:
             "chat_new": (list(self.chat_new), "chat messages since your last turn", f"{len(self.chat_new)} new"),
             "chat_recent": (list(self.chat_recent), "the last 40 chat messages", ""),
             "budget": (budget, "today's model budget for traders, USD", ""),
+            "colleagues": ([{"id": e["id"], "name": e.get("name"), "role": e["role"]} for e in staff if not e["fired_ts"]],
+                           "who works here: address people by id in say(text, to=id); call them by name", ""),
             "my_params": (dict(getattr(self, "params", {})), "limits the manager has set for you (heartbeat_min, max_size, max_hold_min)", ""),
             "my_evaluations": (evals, "your last 5 held-out evaluation results, as the office recorded them (even if your call timed out)", ""),
             "office_time": (now, "the office clock", ""),
@@ -351,6 +362,8 @@ class Runner:
         self.office.report("wake", {"turn": self.turn_n, "reasons": reasons})
         self.office.report("agent_state", {"state": "thinking"})
         notes, self.notes = self.notes, []
+        if not getattr(self, "my_name", None):
+            notes = notes + ["you have no name yet -- choose one for yourself with set_name(...)"]
         root = (mapmod.render(self.ns, self.facts, self.tool_sigs, reasons, notes, self.version)
                 + "\n\nTASK: handle what woke you. Look at the data you need, decide whether to act, and change "
                   "your strategy objects if you learned something. Then set answer and finish.")

@@ -77,6 +77,7 @@ function line(ev) {
     case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} ${esc(p.pair)} @ ${p.entry_px}</span>`;
     case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}) @ ${p.exit_px} · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span>, fees ${p.fees}</span>`;
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
+    case "name": return `<span class="sys">${esc(p.employee)} is now called <b>${esc(p.name)}</b></span>`;
     case "wake": return `<span class="sys">${a} woke: ${esc((p.reasons || []).join("; "))}</span>`;
     case "version": return `<span class="sys">${a} changed strategy → version ${esc(p.version || "none")} (${esc((p.objects || []).join(", "))})</span>`;
     case "command": return `<span class="sys">${a} set ${esc(p.employee)}: ${esc(JSON.stringify(p.changes))}${p.reason ? " — " + esc(p.reason) : ""}</span>`;

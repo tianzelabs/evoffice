@@ -46,6 +46,7 @@ class Office:
     def positions(self, employee: str, open_only: bool = False) -> list[dict]:
         return self.get("/positions", employee=employee, open=str(open_only).lower())
     def budget(self) -> dict: return self.get("/budget/me")
+    def set_name(self, name: str) -> dict: return self.post("/me/name", {"name": name})
 
     def open_position(self, side: str, size: float, strategy_version: str | None = None,
                       max_hold_s: int | None = None) -> dict:

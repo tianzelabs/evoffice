@@ -28,6 +28,12 @@ Direction
   and lost 22.5 bps a trade on unseen data. Untried: other horizons, exits other
   than a fixed hold, sizing by the volatility forecast.
 
+Live experiments
+- A few small live paper trades (0.005 BTC) of a FROZEN, written-down hypothesis are the
+  cleanest test there is: the future is data nobody -- you included -- has seen. Prefer
+  that over long arguments on visible data. Record which version each trade belongs to
+  (it is automatic) and judge the version by its trades and its held-out result together.
+
 Testing your own ideas
 - A pattern that looks good on data you have already looked at often fails on
   data you have not. Decide what you will test before you look; keep some recent
