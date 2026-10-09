@@ -1,0 +1,18 @@
+[Unit]
+Description=Pixel Office -- trader-2 (RLM in its own container; holds no model key)
+After=office-server.service docker.service
+# Wants, not Requires: restarting the server must not restart (and re-wake) the agents
+Wants=office-server.service
+
+[Service]
+Environment=DOCKER_HOST=unix:///run/user/1001/docker.sock
+WorkingDirectory=%h/pixel-office-home/pixel-office
+ExecStartPre=-/usr/bin/docker rm -f office-trader-2
+ExecStart=/usr/bin/docker run --rm --name office-trader-2 --env-file %h/pixel-office/trader-2.env \
+  -v %h/pixel-office-home/pixel-office:/app:ro -v %h/pixel-office/trader-2-state:/state pixel-office-trader
+ExecStop=/usr/bin/docker stop -t 30 office-trader-2
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

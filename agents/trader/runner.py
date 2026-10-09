@@ -306,7 +306,9 @@ class Runner:
     def wake_reasons(self) -> list[str]:
         reasons = []
         for c in self.chat_new:
-            if c["to"] == self.me or c["from"] in ("boss", "manager"):
+            # addressed to me, or the boss/manager speaking to everyone -- not a message to another trader
+            # (found live: the manager's note to trader-2 woke trader-1 too)
+            if c["to"] == self.me or (c["from"] in ("boss", "manager") and not c["to"]):
                 reasons.append(f"a chat message from {c['from']}")
                 break
         sw = self.ns.get("should_wake")

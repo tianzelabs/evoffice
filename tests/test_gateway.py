@@ -92,6 +92,24 @@ def test_each_trader_has_its_own_budget(tmp_path):
     assert c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t2")).status_code == 200   # untouched by trader-1
 
 
+def test_a_200_without_usage_is_retried_then_refused(tmp_path):
+    calls = []
+
+    def upstream(request):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(200, json={"error": {"message": "provider hiccup"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}],
+                                         "usage": {"prompt_tokens": 1, "completion_tokens": 1, "cost": 0.001}})
+    store = Store(str(tmp_path / "o.db"))
+    gw = llm.Gateway(store, key="k", transport=httpx.MockTransport(upstream))
+    c = TestClient(create_app(store, FakeMarket(), {"t1": {"id": "trader-1", "role": "trader"}}, backstop_every_s=0, gateway=gw))
+    r = c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1"))
+    assert r.status_code == 200 and len(calls) == 2                        # retried once, then fine
+    spends = [e["payload"] for e in store.events_since(0) if e["kind"] == "spend"]
+    assert "malformed" in spends[0] and "malformed" not in spends[1]
+
+
 def test_streaming_is_refused_because_its_cost_could_not_be_read(office):
     c, _, seen = office
     assert c.post("/llm/v1/chat/completions", json={**CHAT, "stream": True}, headers=H("t1")).status_code == 400

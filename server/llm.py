@@ -24,7 +24,9 @@ from .store import Store
 UPSTREAM = "https://openrouter.ai"
 BUDGET_USD = {"trader": 0.30, "manager": 0.20}                    # per EMPLOYEE, per UTC day (user, 2026-10-09)
 ALLOWED = {
-    "trader": {"anthropic/claude-haiku-5.5", "typesafe/jev-1.13"},
+    # haiku-5.5 for trader-1; gemini-3.1-flash-lite for trader-2 -- the only other candidate that kept
+    # should_wake and reported its own change truthfully (gpt-5-mini, deepseek-v4-flash failed both)
+    "trader": {"anthropic/claude-haiku-5.5", "google/gemini-3.1-flash-lite", "typesafe/jev-1.13"},
     "manager": set(filter(None, os.environ.get("OFFICE_MANAGER_MODELS", "").split(","))) | {"typesafe/jev-1.13"},
 }
 ROUTES = {"chat": "/api/v1/chat/completions", "decisions": "/api/alpha/decisions"}
@@ -91,15 +93,27 @@ class Gateway:
             if "max_tokens" not in body and "max_completion_tokens" not in body:
                 body["max_tokens"] = cap
         key = self.key or load_key()
-        r = self.client.post(ROUTES[route], json=body, headers={"Authorization": f"Bearer {key}"})
-        data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {"error": r.text[:500]}
-        usage = data.get("usage") or {}
-        cost = usage.get("cost")
-        self.store.emit(who["id"], "spend", {
-            "role": role, "model": model, "route": route, "status": r.status_code,
-            "in_tok": usage.get("prompt_tokens", usage.get("input_tokens")),
-            "out_tok": usage.get("completion_tokens", usage.get("output_tokens")),
-            "cost": float(cost) if cost is not None else 0.0, "unpriced": cost is None and r.status_code == 200})
+        for attempt in (1, 2):
+            r = self.client.post(ROUTES[route], json=body, headers={"Authorization": f"Bearer {key}"})
+            try:
+                data = r.json()
+            except ValueError:
+                data = {"error": r.text[:500]}
+            usage = data.get("usage") or {}
+            cost = usage.get("cost")
+            # Found live with trader-2: OpenRouter answered 200 with no usage (an upstream provider
+            # error in a 200 body). Passed through, it crashed the agent's client. Retry once; then refuse.
+            malformed = r.status_code == 200 and (not usage or (route == "chat" and not data.get("choices")))
+            self.store.emit(who["id"], "spend", {
+                "role": role, "model": model, "route": route, "status": r.status_code, "attempt": attempt,
+                "in_tok": usage.get("prompt_tokens", usage.get("input_tokens")),
+                "out_tok": usage.get("completion_tokens", usage.get("output_tokens")),
+                "cost": float(cost) if cost is not None else 0.0, "unpriced": cost is None and r.status_code == 200,
+                **({"malformed": str(data)[:300]} if malformed else {})})
+            if not malformed:
+                break
+        if malformed:
+            raise GatewayRefused(502, f"upstream returned 200 without a usable answer: {str(data)[:300]}")
         if r.status_code != 200:
             raise GatewayRefused(r.status_code, f"upstream: {str(data.get('error', data))[:300]}")
         return data
