@@ -111,6 +111,7 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         return FileResponse(STATIC / "index.html")
 
     app.mount("/assets", StaticFiles(directory=WEB / "assets", check_dir=False), name="assets")
+    app.mount("/kenney", StaticFiles(directory=WEB / "kenney", check_dir=False), name="kenney")   # CC0 art, see its README
 
     @app.get("/me")
     def me(w: dict = Depends(who)):

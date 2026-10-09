@@ -5,6 +5,10 @@
 //   agent_state idle     -> wanders (coffee, window, water cooler, plants)
 //   say                  -> speech bubble; the boss walks in through the door to speak
 //   wake / version / evaluation / open / close / command / fire -> small effects
+//
+// Art: Kenney's Roguelike Indoors and Roguelike Characters (CC0, kenney.nl) -- see
+// public/kenney/README.txt. Monitors, coffee machine and water cooler are drawn in
+// code (pixels.ts): the packs have none.
 import * as Phaser from "phaser";
 import { makeTextures, SCALE } from "./pixels";
 import type { OfficeEvent } from "./net";
@@ -13,15 +17,21 @@ export const W = 960, H = 600;
 type Pt = { x: number; y: number };
 
 const SPOTS: Record<string, Pt> = {
-  traderDesk: { x: 210, y: 372 }, managerDesk: { x: 835, y: 300 }, door: { x: 480, y: 585 },
-  bossStand: { x: 480, y: 470 }, coffee: { x: 470, y: 200 }, cooler: { x: 620, y: 200 },
-  window: { x: 140, y: 175 }, plant: { x: 70, y: 210 }, sofa: { x: 330, y: 500 },
-  managerWindow: { x: 760, y: 200 }, managerSide: { x: 900, y: 360 }, traderVisit: { x: 330, y: 372 },
+  managerDesk: { x: 835, y: 318 }, door: { x: 480, y: 585 },
+  bossStand: { x: 480, y: 470 }, coffee: { x: 470, y: 205 }, cooler: { x: 620, y: 205 },
+  window: { x: 140, y: 185 }, plant: { x: 70, y: 215 }, sofa: { x: 154, y: 545 },
+  managerWindow: { x: 760, y: 205 }, managerSide: { x: 905, y: 370 },
 };
+// one desk per trader seat: trader-1, trader-2, ... (a third would sit at the last)
+const DESKS: Pt[] = [{ x: 186, y: 300 }, { x: 456, y: 300 }];
+const deskSpot = (i: number): Pt => ({ x: DESKS[Math.min(i, DESKS.length - 1)].x, y: DESKS[Math.min(i, DESKS.length - 1)].y + 78 });
 const ROAM: Record<string, string[]> = {
-  trader: ["coffee", "cooler", "window", "plant", "sofa", "traderDesk", "traderDesk"],
+  trader: ["coffee", "cooler", "window", "plant", "sofa", "home", "home", "home"],
   manager: ["managerDesk", "managerWindow", "managerSide", "managerDesk", "coffee"],
 };
+// Kenney sheets: 16 px tiles with 1 px spacing; frame = row * columns + col
+const IN = (c: number, r: number) => r * 27 + c;
+const PEOPLE_FRAME: Record<string, number> = { "trader-1": 0, "trader-2": 1, manager: 2, boss: 3 };
 
 class Actor {
   sprite: Phaser.GameObjects.Image;
@@ -33,8 +43,8 @@ class Actor {
   frame = 0;
   tween?: Phaser.Tweens.Tween;
 
-  constructor(private scene: OfficeScene, public role: string, public name: string, at: Pt) {
-    this.sprite = scene.add.image(at.x, at.y, `${role}-0`).setScale(SCALE).setOrigin(0.5, 1);
+  constructor(private scene: OfficeScene, public role: string, public name: string, at: Pt, frame: number, public home: Pt) {
+    this.sprite = scene.add.image(at.x, at.y, "people", frame).setScale(SCALE).setOrigin(0.5, 1);
     this.label = scene.add.text(at.x, at.y + 4, name, { resolution: 3, fontFamily: "monospace", fontSize: "12px", color: "#1d1d1f",
       backgroundColor: "#ffffffcc", padding: { x: 3, y: 1 } }).setOrigin(0.5, 0);
     this.sync();
@@ -59,14 +69,14 @@ class Actor {
     this.tween = this.scene.tweens.add({
       targets: this.sprite, x: p.x, y: p.y, duration: (d / 110) * 1000, ease: "Linear",
       onUpdate: () => this.sync(),
-      onComplete: () => { this.walking = false; this.sprite.setTexture(`${this.role}-0`); this.sync(); then?.(); },
+      onComplete: () => { this.walking = false; this.sprite.setScale(SCALE); this.sync(); then?.(); },
     });
   }
 
   step() {
     if (!this.walking) return;
-    this.frame ^= 1;
-    this.sprite.setTexture(`${this.role}-${this.frame}`);
+    this.frame ^= 1;                                   // a waddle: the sheet has one frame per person
+    this.sprite.setScale(SCALE, this.frame ? SCALE * 0.94 : SCALE);
   }
 
   say(text: string) {
@@ -110,8 +120,8 @@ export class OfficeScene extends Phaser.Scene {
   actors: Record<string, Actor> = {};      // keyed by seat: "trader-1", "manager", "boss"
   seatOf: Record<string, string> = {};     // employee id -> seat
   screenText!: Phaser.GameObjects.Text;
-  priceText!: Phaser.GameObjects.Text;
-  chart!: Phaser.GameObjects.Graphics;
+  charts: Phaser.GameObjects.Graphics[] = [];
+  priceTexts: Phaser.GameObjects.Text[] = [];
   sky!: Phaser.GameObjects.Graphics;
   clock!: Phaser.GameObjects.Text;
   tick = 0;
@@ -121,6 +131,11 @@ export class OfficeScene extends Phaser.Scene {
   constructor() {
     super("office");
     this.ready = new Promise((r) => (this.resolveReady = r));
+  }
+
+  preload() {
+    this.load.spritesheet("indoor", "/kenney/indoor.png", { frameWidth: 16, frameHeight: 16, spacing: 1 });
+    this.load.spritesheet("people", "/kenney/people.png", { frameWidth: 16, frameHeight: 16 });
   }
 
   create() {
@@ -134,54 +149,67 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------- the room ----------
+  tile(c: number, r: number, x: number, y: number, depth = y) {
+    return this.add.image(x, y, "indoor", IN(c, r)).setScale(SCALE).setOrigin(0, 1).setDepth(depth);
+  }
+
   drawRoom() {
+    const T = 16 * SCALE;                                              // one tile on screen: 48 px
     const g = this.add.graphics().setDepth(-10);
-    g.fillStyle(0xb98a5b).fillRect(0, 120, W, H - 120);                  // floor
-    g.lineStyle(2, 0xa47548, 1);
+    // a calm wooden floor, drawn: Kenney's plank tiles read as a loud orange at this size
+    g.fillStyle(0xc9a074).fillRect(0, 120, W, H - 120);
+    g.lineStyle(2, 0xb48b60, 1);
     for (let y = 144; y < H; y += 24) {
       g.lineBetween(0, y, W, y);
       for (let x = (y / 24) % 2 ? 0 : 60; x < W; x += 120) g.lineBetween(x, y - 24, x, y);
     }
-    g.fillStyle(0xd9cbb4).fillRect(0, 0, W, 120);                        // wall
-    g.fillStyle(0x8f7a5c).fillRect(0, 114, W, 8);                        // baseboard
+    g.fillStyle(0xd9cbb4).fillRect(0, 0, W, 120);                      // wall
+    g.fillStyle(0x8f7a5c).fillRect(0, 114, W, 8);                      // baseboard
     this.sky = this.add.graphics().setDepth(-9);
     this.paintSky();
-    g.lineStyle(6, 0x5a4632, 1).strokeRect(40, 16, 200, 86);             // window frame
+    g.lineStyle(6, 0x5a4632, 1).strokeRect(40, 16, 200, 86);           // window frame
     g.lineBetween(140, 16, 140, 102);
-    // the wall screen: the leaderboard
-    g.fillStyle(0x222228).fillRect(296, 8, 338, 102);
+    g.fillStyle(0x222228).fillRect(296, 8, 338, 102);                  // the wall screen: the leaderboard
     g.fillStyle(0x0d1a12).fillRect(304, 14, 322, 90);
     this.add.text(312, 18, "LEADERBOARD", { resolution: 3, fontFamily: "monospace", fontSize: "12px", color: "#5dff9a" }).setDepth(-8);
     this.screenText = this.add.text(312, 36, "", { resolution: 3, fontFamily: "monospace", fontSize: "12px", color: "#a8f0c0", lineSpacing: 3 }).setDepth(-8);
     this.clock = this.add.text(870, 30, "", { resolution: 3, fontFamily: "monospace", fontSize: "16px", color: "#3a2f22" }).setOrigin(0.5).setDepth(-8);
-    // the manager's glass office, with a door gap on its left wall
-    g.fillStyle(0x9fd3f5, 0.13).fillRect(690, 126, 264, 280);
-    g.lineStyle(4, 0x7fb9de, 0.9);
-    g.lineBetween(690, 126, 954, 126); g.lineBetween(954, 126, 954, 406); g.lineBetween(690, 406, 954, 406);
-    g.lineBetween(690, 126, 690, 290); g.lineBetween(690, 360, 690, 406);
+    [[19, 12], [20, 12]].forEach(([c, r], i) => this.tile(c, r, 660 + i * 54, 100, -8));   // pictures on the wall
+    // the manager's glass office and its desk
+    g.fillStyle(0x9fd3f5, 0.10).fillRect(690, 126, 264, 280);
+    const glass = this.add.graphics().setDepth(400);
+    glass.lineStyle(4, 0x7fb9de, 0.9);
+    glass.lineBetween(690, 126, 954, 126); glass.lineBetween(954, 126, 954, 406); glass.lineBetween(690, 406, 954, 406);
+    glass.lineBetween(690, 126, 690, 290); glass.lineBetween(690, 360, 690, 406);
     this.add.text(822, 134, "MANAGER", { resolution: 3, fontFamily: "monospace", fontSize: "11px", color: "#3c6f92" }).setOrigin(0.5, 0).setDepth(-8);
-    // desks
-    this.desk(g, 120, 300, 180);
-    this.desk(g, 760, 232, 150);
-    this.add.image(185, 300, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(299);
-    this.add.image(250, 300, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(299);
-    this.add.image(835, 232, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(231);
-    this.chart = this.add.graphics().setDepth(300);
-    this.priceText = this.add.text(250, 250, "", { resolution: 3, fontFamily: "monospace", fontSize: "11px", color: "#5dff9a" }).setOrigin(0.5).setDepth(301);
-    // the rest of the room
-    this.add.image(30, 170, "plant").setScale(SCALE).setOrigin(0.5, 1).setDepth(170);
-    this.add.image(930, 470, "plant").setScale(SCALE).setOrigin(0.5, 1).setDepth(470);
-    this.add.image(470, 150, "coffee").setScale(SCALE).setOrigin(0.5, 1).setDepth(150);
-    this.add.image(620, 150, "cooler").setScale(SCALE).setOrigin(0.5, 1).setDepth(150);
-    g.fillStyle(0x6d5a8a).fillRoundedRect(270, 470, 130, 40, 8);         // sofa
-    g.fillStyle(0x58486f).fillRoundedRect(270, 456, 130, 20, 8);
-    g.fillStyle(0x3a2f22).fillRect(440, 592, 80, 8);                     // the door
+    this.kdesk(762, 240, 3);
+    this.add.image(835, 214, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(241);
+    // trader desks: four table tiles, two monitors, a chair each
+    this.charts = [];
+    this.priceTexts = [];
+    DESKS.forEach((d) => {
+      this.kdesk(d.x - 96, d.y, 4);
+      this.add.image(d.x - 34, d.y - 26, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(d.y + 1);
+      this.add.image(d.x + 34, d.y - 26, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(d.y + 1);
+      this.tile(0, 8, d.x - 24, d.y + 44, d.y + 40);                  // office chair in front of the desk
+      this.charts.push(this.add.graphics().setDepth(d.y + 2));
+      this.priceTexts.push(this.add.text(d.x + 34, d.y - 80, "", { resolution: 3, fontFamily: "monospace", fontSize: "11px", color: "#5dff9a" }).setOrigin(0.5).setDepth(d.y + 3));
+    });
+    // filing cabinets along the back wall, coffee and water
+    [[4, 13], [7, 13], [1, 13]].forEach(([c, r], i) => this.tile(c, r, 300 + i * T, 172, 170));
+    this.add.image(470, 160, "coffee").setScale(SCALE).setOrigin(0.5, 1).setDepth(160);
+    this.add.image(620, 160, "cooler").setScale(SCALE).setOrigin(0.5, 1).setDepth(160);
+    // the lounge: two armchairs and a small table between them
+    this.tile(14, 10, 70, 500); this.tile(5, 0, 130, 495); this.tile(15, 10, 190, 500);
+    // plants, and the door
+    this.tile(16, 0, 10, 175); this.tile(17, 0, 910, 470); this.tile(16, 0, 640, 560);
+    g.fillStyle(0x3a2f22).fillRect(440, 592, 80, 8);
   }
 
-  desk(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number) {
-    g.fillStyle(0x6b4a2f).fillRect(x, y, w, 40);
-    g.fillStyle(0x8a6240).fillRect(x, y - 6, w, 10);
-    g.fillStyle(0x4e3622).fillRect(x + 6, y + 40, 8, 20).fillRect(x + w - 14, y + 40, 8, 20);
+  /** a desk of n Kenney table tiles, left end + middles + right end */
+  kdesk(x: number, y: number, n: number) {
+    const T = 16 * SCALE;
+    for (let i = 0; i < n; i++) this.tile(i === 0 ? 4 : i === n - 1 ? 7 : 5 + (i % 2), 6, x + i * T, y, y);
   }
 
   paintSky() {
@@ -206,10 +234,14 @@ export class OfficeScene extends Phaser.Scene {
   actor(employee: string): Actor | undefined {
     const seat = this.seat(employee);
     if (this.actors[seat]) return this.actors[seat];
-    if (seat === "manager") return (this.actors[seat] = new Actor(this, "manager", employee, SPOTS.managerDesk));
-    if (seat.startsWith("trader")) return (this.actors[seat] = new Actor(this, "trader", employee, SPOTS.traderDesk));
+    if (seat === "manager") return (this.actors[seat] = new Actor(this, "manager", employee, SPOTS.managerDesk, PEOPLE_FRAME.manager, SPOTS.managerDesk));
+    if (seat.startsWith("trader")) {
+      const i = Math.max(0, parseInt(seat.split("-")[1] ?? "1", 10) - 1);
+      const home = deskSpot(i);
+      return (this.actors[seat] = new Actor(this, "trader", employee, home, PEOPLE_FRAME[seat] ?? 0, home));
+    }
     if (seat === "boss") {             // the boss is not in the office; it walks in only to speak
-      const b = new Actor(this, "boss", "boss", SPOTS.door);
+      const b = new Actor(this, "boss", "boss", SPOTS.door, PEOPLE_FRAME.boss, SPOTS.door);
       b.sprite.setAlpha(0); b.label.setAlpha(0);
       return (this.actors[seat] = b);
     }
@@ -220,7 +252,8 @@ export class OfficeScene extends Phaser.Scene {
     for (const [seat, a] of Object.entries(this.actors)) {
       if (a.thinking || a.walking || seat === "boss" || Math.random() < 0.4) continue;
       const spots = ROAM[a.role] ?? [];
-      a.walkTo(SPOTS[spots[Math.floor(Math.random() * spots.length)]]);
+      const pick = spots[Math.floor(Math.random() * spots.length)];
+      a.walkTo(pick === "home" ? a.home : SPOTS[pick]);
     }
   }
 
@@ -249,7 +282,7 @@ export class OfficeScene extends Phaser.Scene {
       a.walkTo(SPOTS.door, () => a.fadeOut(() => {
         a.rename(p.successor);
         a.sprite.setPosition(SPOTS.door.x, SPOTS.door.y).setAlpha(1); a.label.setAlpha(1); a.sync();
-        a.walkTo(SPOTS.traderDesk, () => a.say("Hi, I'm new here."));
+        a.walkTo(a.home, () => a.say("Hi, I'm new here."));
       }));
       return;
     }
@@ -260,7 +293,7 @@ export class OfficeScene extends Phaser.Scene {
       if (p.state === "asleep" && live) a.say(`zZz — ${p.why ?? "asleep"}`);
       const on = p.state === "thinking";
       a.setThinking(on);
-      if (on && live) a.walkTo(a.role === "manager" ? SPOTS.managerDesk : SPOTS.traderDesk);
+      if (on && live) a.walkTo(a.home);
       return;
     }
     if (!live) return;                          // replay restores state; only live events animate
@@ -279,11 +312,13 @@ export class OfficeScene extends Phaser.Scene {
       case "evaluation":
         this.float(this.head(a), `held-out: ${p.net_bps_per_trade ?? "–"} bps/trade`, (p.net_bps_per_trade ?? -1) > 0 ? "#1b7a3d" : "#c62828");
         break;
-      case "open": this.float({ x: 215, y: 250 }, `OPEN ${p.side} ${p.size}`, "#1d1d1f"); break;
-      case "close": this.float({ x: 215, y: 250 }, `${p.pnl_bps >= 0 ? "+" : ""}${p.pnl_bps} bps`, p.pnl_bps >= 0 ? "#1b7a3d" : "#c62828"); break;
+      case "open": this.float({ x: a.home.x, y: a.home.y - 140 }, `OPEN ${p.side} ${p.size}`, "#1d1d1f"); break;
+      case "close": this.float({ x: a.home.x, y: a.home.y - 140 }, `${p.pnl_bps >= 0 ? "+" : ""}${p.pnl_bps} bps`, p.pnl_bps >= 0 ? "#1b7a3d" : "#c62828"); break;
       case "command": {
         const back = a.pos;
-        a.walkTo(SPOTS.traderVisit, () => { a.say(`New limits for ${p.employee}: ${JSON.stringify(p.changes)}`); this.time.delayedCall(6000, () => a.walkTo(back)); });
+        const target = this.actors[this.seat(p.employee)];
+        const visit = target ? { x: target.home.x + 90, y: target.home.y } : SPOTS.door;
+        a.walkTo(visit, () => { a.say(`New limits for ${p.employee}: ${JSON.stringify(p.changes)}`); this.time.delayedCall(6000, () => a.walkTo(back)); });
         break;
       }
     }
@@ -291,19 +326,20 @@ export class OfficeScene extends Phaser.Scene {
 
   // ---------- the trader's monitor and the wall screen ----------
   setChart(bars: { c: number }[], price?: number) {
-    this.chart.clear();
     if (bars.length < 2) return;
-    const x0 = 235, y0 = 274, w = 30, h = 15;   // the right-hand monitor's screen, in room pixels
     const cs = bars.map((b) => b.c), lo = Math.min(...cs), hi = Math.max(...cs);
     const up = cs[cs.length - 1] >= cs[0];
-    this.chart.lineStyle(1.5, up ? 0x5dff9a : 0xff6b6b, 1);
-    this.chart.beginPath();
-    cs.forEach((c, i) => {
-      const x = x0 + (i / (cs.length - 1)) * w, y = y0 + h - ((c - lo) / Math.max(1e-9, hi - lo)) * h;
-      i ? this.chart.lineTo(x, y) : this.chart.moveTo(x, y);
+    DESKS.forEach((d, k) => {
+      const chart = this.charts[k];
+      chart.clear().lineStyle(1.5, up ? 0x5dff9a : 0xff6b6b, 1).beginPath();
+      const x0 = d.x + 19, y0 = d.y - 52, w = 30, h = 15;     // the right-hand monitor's screen
+      cs.forEach((c, i) => {
+        const x = x0 + (i / (cs.length - 1)) * w, y = y0 + h - ((c - lo) / Math.max(1e-9, hi - lo)) * h;
+        i ? chart.lineTo(x, y) : chart.moveTo(x, y);
+      });
+      chart.strokePath();
+      if (price) this.priceTexts[k].setText(price.toFixed(0));
     });
-    this.chart.strokePath();
-    if (price) this.priceText.setText(price.toFixed(0));
   }
 
   setBoard(board: any) {
