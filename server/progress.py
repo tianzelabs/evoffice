@@ -51,12 +51,14 @@ def _events(store: Store, employee: str, kinds: tuple[str, ...]) -> list[dict]:
     return rows
 
 
-def compute(store: Store, employee: str) -> dict:
-    evs = _events(store, employee, ("evaluation", "version", "name"))
+def compute(store: Store, employee: str, since: str = "", until: str = "9999") -> dict:
+    """since/until (ISO timestamps) restrict everything to a window -- a season scores only its own week."""
+    inside = lambda ts: since <= (ts or "") < until
+    evs = [e for e in _events(store, employee, ("evaluation", "version", "name")) if inside(e["ts"])]
     evals = [e for e in evs if e["kind"] == "evaluation" and e["payload"].get("net_bps_per_trade") is not None]
     versions = [e for e in evs if e["kind"] == "version"]
-    trades = store.q("SELECT closed_ts, pnl, strategy_version FROM positions WHERE employee_id = ? AND closed_ts IS NOT NULL "
-                     "ORDER BY closed_ts", (employee,))
+    trades = [t for t in store.q("SELECT closed_ts, pnl, strategy_version FROM positions WHERE employee_id = ? "
+                                 "AND closed_ts IS NOT NULL ORDER BY closed_ts", (employee,)) if inside(t["closed_ts"])]
     xp, log, best = 0, [], None
     for e in evals:
         p = e["payload"]

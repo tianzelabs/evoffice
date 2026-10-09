@@ -146,6 +146,7 @@ export class OfficeScene extends Phaser.Scene {
   plates: Record<string, Phaser.GameObjects.Text> = {};
   bars: Record<string, Phaser.GameObjects.Graphics> = {};      // per plate: XP (gold) and budget left (green)
   levels: Record<string, string> = {};                        // employee id -> "Lv2"
+  cups: Record<string, Phaser.GameObjects.Text> = {};         // per plate: trophies on the desk
   screens: { chart: Phaser.GameObjects.Graphics; code: Phaser.GameObjects.Graphics; price: Phaser.GameObjects.Text; place: Place }[] = [];
   screenText!: Phaser.GameObjects.Text;
   whiteboard!: Phaser.GameObjects.Text;
@@ -356,6 +357,18 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** trophies won so far, on each winner's desk */
+  setTrophies(trophies: Record<string, any[]>) {
+    for (const [id, list] of Object.entries(trophies)) {
+      const a = this.actors[this.seat(id)];
+      if (!a?.place) continue;
+      const key = a.place.plate, { x, y } = a.place.desk;
+      this.cups[key]?.destroy();
+      const n = list.length;
+      this.cups[key] = this.add.text(x + 88, y - 44, n > 3 ? `🏆×${n}` : "🏆".repeat(n), TXT(12, "#b8860b")).setOrigin(1, 1).setDepth(y + 5);
+    }
+  }
+
   bossPresent(): boolean { return (this.actors.boss?.sprite.alpha ?? 0) > 0.5; }
 
   float(at: Pt, text: string, color = "#1d1d1f", icon?: string) {
@@ -459,6 +472,7 @@ export class OfficeScene extends Phaser.Scene {
       case "say": this.converse(a, p.to ?? null, p.text); break;
       case "wake": this.float(this.over(a), "!", "#c62828", "alert"); break;
       case "level": this.float(this.over(a), `LEVEL UP! ${p.title}`, "#b8860b", "bulb"); break;
+      case "award": if (p.award) this.float(this.over(a), `🏆 ${p.title}`, "#b8860b"); break;
       case "badge": this.float(this.over(a), `🏅 ${p.title}`, "#7a5a00"); break;
       case "version": this.float(this.over(a), `new strategy ${String(p.version ?? "").slice(0, 6)}`, "#7a5a00", "bulb"); break;
       case "evaluation":

@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import iterations, leaderboard, names, positions, progress, scheduler, staff
+from . import iterations, leaderboard, names, positions, progress, scheduler, seasons, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
@@ -177,6 +177,11 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     @app.get("/leaderboard")
     def board():
         return leaderboard.standings(store)
+
+    @app.get("/season")
+    def season():
+        """This week's standings, when it ends, and every trophy handed out so far."""
+        return seasons.summary(store)
 
     @app.get("/progress")
     def progress_all():

@@ -74,6 +74,8 @@ def alert_tick(store: Store, market, now: datetime) -> dict | None:
 
 
 def tick(store: Store, market, now: datetime | None = None) -> None:
+    from . import seasons
     now = now or datetime.now(timezone.utc)
     meeting_tick(store, now)
+    seasons.tick(store, now)
     alert_tick(store, market, now)

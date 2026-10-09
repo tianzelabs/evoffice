@@ -11,6 +11,7 @@
     <span id="price">BTC …</span>
     <span class="muted" id="budget"></span>
     <span class="muted" id="me"></span>
+    <span class="replay-ctl"><input type="date" id="replay-day"><select id="replay-speed"><option value="30">×30</option><option value="60" selected>×60</option><option value="240">×240</option></select><button id="replay-go">▶ replay</button><a id="live-link" href="/" hidden>● back to live</a></span>
     <a class="muted" href="/text">text view</a>
   </header>
   <main>
@@ -22,6 +23,8 @@
         <form id="say"><input id="text" placeholder="Speak as the boss" autocomplete="off" maxlength="2000"><button>Send</button></form>
       </section>
       <section>
+        <h2>Season <span id="season-name" class="muted"></span></h2>
+        <div id="season" class="muted">…</div>
         <h2>Iteration — did the change help?</h2>
         <div id="iterations" class="muted">…</div>
         <h2>Leaderboard</h2>

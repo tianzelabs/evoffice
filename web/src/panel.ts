@@ -22,6 +22,8 @@ function line(e: OfficeEvent): string | null {
   switch (e.kind) {
     case "say": return `${a}${p.to ? " → " + esc(displayName(p.to)) : ""}: ${esc(p.text)}`;
     case "name": return `<span class="sys">${esc(p.previous ?? e.actor)} is now called <b>${esc(p.name)}</b></span>`;
+    case "award": return p.award ? `<span class="trophy">🏆 ${a} wins <b>${esc(p.title)}</b> for ${esc(p.season)}</span>`
+                                 : `<span class="sys">${esc(p.season)}: ${esc(p.title)}</span>`;
     case "meeting": return `<span class="sys">— ${p.phase === "start" ? "daily stand-up begins at the meeting table" : "stand-up over"} —</span>`;
     case "alert": return `<span class="neg"><b>⚠ market alert:</b> ${esc(p.text)}</span>`;
     case "level": return `<span class="sys">${a} reached level ${p.level}: <b>${esc(p.title)}</b> — size cap ${p.max_size} BTC</span>`;
@@ -51,6 +53,17 @@ export function addToLog(e: OfficeEvent) {
   d.innerHTML = `<span class="t">${e.ts.slice(11, 16)}</span>${html}`;
   log.appendChild(d);
   if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+export async function refreshSeason() {
+  const s = await getJSON("/season");
+  $("#season-name").textContent = `${s.season} · ends ${s.ends.slice(5, 16).replace("T", " ")} UTC`;
+  const rows = s.standings.map((r: any) => {
+    const cups = (s.trophies[r.employee] ?? []).length;
+    return `<tr><td>${esc(displayName(r.employee))}${cups ? ` <span class="trophy">🏆×${cups}</span>` : ""}</td><td>${r.xp}</td><td>${r.evaluations}</td><td>${r.trades}</td><td class="${r.pnl >= 0 ? "pos" : "neg"}">${r.pnl}</td></tr>`;
+  }).join("");
+  $("#season").innerHTML = `<table><thead><tr><th>this week</th><th>XP</th><th>tests</th><th>trades</th><th>P&L</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return s;
 }
 
 let careerOf: Record<string, any> = {};
