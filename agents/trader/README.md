@@ -2,17 +2,20 @@
 
 Built on **Recursive Language Models** (`rlms`, `from rlm import RLM`,
 github.com/alexzhang13/rlm). The trader's data and its past sessions live as
-**variables in a persistent Python REPL** (`DockerREPL`, `persistent=True`, which
-keeps `context_N` / `history_N` across `completion()` calls), so it can compare
-and recompute over them instead of re-reading them into a prompt.
+**variables in a persistent Python REPL**, so it can compare and recompute over
+them instead of re-reading them into a prompt. The whole trader — runner, watcher,
+RLM and its **LocalREPL** — runs in **one container** with no API key and no
+database access (spike 1: DockerREPL silently drops functions and cannot reach the
+host). Model: claude-haiku-5.5 (spike 2).
 
 ## Planned files
 
 | file | owns |
 |---|---|
-| `runner.py` | the process: holds the RLM + REPL, wakes it, applies manager commands (params, fire) |
+| `runner.py` | the process: holds the RLM + REPL, writes the facts into the namespace, wakes it, applies manager commands |
+| `map.py` | generates the per-turn map: wake reason, every object's meaning / freshness / change, the trader's own objects, the `history_N` index (spike 5) |
 | `watcher.py` | always-on, **no model calls**: evaluates the trader's own trigger functions on live prices and wakes the RLM |
-| `repl_bootstrap.py` | what a fresh REPL starts with: the `office` client injected as code, ledger + recent chat loaded as variables |
+| `repl_bootstrap.py` | what a fresh REPL starts with: `class` re-enabled, the office tools (open/close/say/jev), shared mechanics; ledger and recent chat as variables |
 | `prompt.md` | the trader's starting instructions |
 
 ## How it is awake
@@ -31,4 +34,6 @@ separately — so iteration is measured instead of punished.
 
 ## Does not own
 
-Fees, settlement, prices, the ledger (server). Its own budget cap (`common/llm.py`).
+Fees, settlement, prices, the ledger, its budget cap, the held-out evaluation
+window (all server). Never pass per-turn data as the RLM `context` — rlms
+re-points it at `context_0` every turn (spike 5).

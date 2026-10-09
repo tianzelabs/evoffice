@@ -21,8 +21,10 @@ model, settlement, the ledger, or a budget.
 | `market.py` | BTC/USD price from ClickHouse, read-only, never fabricated — carried from `village/` |
 | `leaderboard.py` | per-employee and per-strategy-version standings, derived from `positions` |
 | `budget.py` | daily spend per role from `spend` events; answers "may this call go out?" |
+| `llm.py` | the `/llm` gateway: holds the OpenRouter key, checks the budget, forwards model and Jev calls, writes `spend` |
+| `evaluator/` (P1.5) | scores strategies a trader submits as code on a held-out window it cannot read; sandboxed, aggregates out only |
 
 ## Does not own
 
-Any agent's reasoning, prompts or memory. Strategy. Animation. The server never
+Any agent's reasoning, prompts, memory or REPL. Strategy. Animation. The server never
 decides *what* to trade — only what a trade was worth.
