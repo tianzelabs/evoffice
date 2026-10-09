@@ -37,9 +37,32 @@ STATE = Path(os.path.expanduser(os.environ.get("MANAGER_STATE", "~/pixel-office/
 HEARTBEAT_S = int(os.environ.get("MANAGER_HEARTBEAT_S", "3600" if BACKEND == "codex" else str(6 * 3600)))
 MIN_GAP_S = int(os.environ.get("MANAGER_MIN_GAP_S", "300" if BACKEND == "codex" else "60"))
 CODEX_TIMEOUT_S = 900
+# Pacing on the user's ChatGPT plan. The limits are the ACCOUNT's -- shared with the user's own
+# Codex use -- so the manager keeps the account's weekly use under WEEKLY_CEILING of the week
+# elapsed so far, leaving the rest to the user, and steps back as the user uses more.
+WEEKLY_CEILING = float(os.environ.get("MANAGER_WEEKLY_CEILING", "0.6"))
+FAST_S, NORMAL_S, SLOW_S, CRAWL_S = 15 * 60, 60 * 60, 2 * 3600, 4 * 3600
+FIVE_HOUR_PAUSE = 85.0
+WEEKLY_FLOOR = 0.10                    # always allow the account's week to reach 10%
 QUIET = {"agent_state", "spend"}
 # what wakes the manager besides the boss and messages to it; only when tokens are free
-TRADER_NEWS = {"evaluation", "close", "version", "fire"} if BACKEND == "codex" else set()
+TRADER_NEWS = {"evaluation", "close", "version", "fire", "say"} if BACKEND == "codex" else set()
+
+CODEX_DUTIES = """
+Your standing duties, because your time is now cheap -- use it:
+- Every wake: check each trader (`office activity <trader>`): what it changed, whether
+  it tested the change before adopting it, what its held-out results say. A trader that
+  changes code without testing, or tests and reports only the best variant, needs to be
+  told -- specifically, with the numbers.
+- Verify, do not trust: when a trader reports a number, reproduce it from
+  `office market` with a script in your workspace when it matters.
+- Keep both traders iterating. One that has gone quiet or keeps repeating the same idea
+  needs a new direction (another horizon, an exit rule, sizing by the volatility forecast,
+  Jev on non-price information). Use parameters when talking is not enough.
+- About every 6 hours (track it in your notes), post a 3-5 line stand-up to the boss:
+  what each trader changed, what the evidence says, what you asked for next.
+- Silence is fine when nothing changed. Never post just to show activity.
+"""
 
 CODEX_ADDENDUM = """
 Your tools: the `office` command in your shell -- run `office --help` first if
@@ -113,7 +136,7 @@ class Manager:
         last.unlink(missing_ok=True)
         cmd = ["codex", "exec", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox",
                "-C", str(self.workspace), "-o", str(last)] + (["-m", self.model] if self.model else []) + ["-"]
-        r = subprocess.run(cmd, input=self.system + CODEX_ADDENDUM + "\n\n" + prompt, capture_output=True,
+        r = subprocess.run(cmd, input=self.system + CODEX_DUTIES + CODEX_ADDENDUM + "\n\n" + prompt, capture_output=True,
                            text=True, timeout=CODEX_TIMEOUT_S)
         events, usage, commands = [], {}, []
         for line in r.stdout.splitlines():
@@ -152,6 +175,7 @@ class Manager:
         cost = sum(e["payload"].get("cost", 0.0) for e in ops.all_events(self.office, mark)
                    if e["kind"] == "spend" and e["actor"] == self.me)
         result = {"backend": BACKEND, "model": self.model or "codex default", "reason": reason,
+                  "limits": self.codex_limits() if BACKEND == "codex" else None,
                   "secs": round(time.perf_counter() - t0, 1), "cost": round(cost, 5), "usage": out.get("usage"),
                   "tool_calls": out["tool_calls"][:40], "summary": out["summary"][:800], "error": err}
         with open(STATE / "turns.jsonl", "a") as f:     # kept for evals (openevals) later
@@ -164,6 +188,51 @@ class Manager:
             (STATE / "runner.json").write_text(json.dumps({"last_seen": self.last_seen, "last_turn": self.last_turn}))
         return result
 
+    # ---------- pacing on the plan's limits ----------
+    def codex_limits(self) -> dict | None:
+        """The newest rate_limits Codex wrote into its session files (exec --json does not report them)."""
+        home = Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser() / "sessions"
+        files = sorted(home.rglob("*.jsonl"), key=lambda f: f.stat().st_mtime) if home.exists() else []
+        for f in reversed(files[-5:]):
+            last = None
+            for line in f.read_text().splitlines():
+                if '"rate_limits"' in line:
+                    last = line
+            if last:
+                def find(o):
+                    if isinstance(o, dict):
+                        if "rate_limits" in o and isinstance(o["rate_limits"], dict):
+                            return o["rate_limits"]
+                        for v in o.values():
+                            r = find(v)
+                            if r:
+                                return r
+                    return None
+                return find(json.loads(last))
+        return None
+
+    def pace(self) -> tuple[int, str]:
+        """Seconds until the next heartbeat, and why. Messages and trader news still wake it sooner."""
+        lim = self.codex_limits() if BACKEND == "codex" else None
+        if not lim:
+            return HEARTBEAT_S, "no limit data: default heartbeat"
+        p, w = lim.get("primary") or {}, lim.get("secondary") or {}
+        if p.get("used_percent", 0) >= FIVE_HOUR_PAUSE:
+            wait = max(600, int(p.get("resets_at", time.time() + 3600) - time.time()))
+            return wait, f"5-hour window {p['used_percent']}% used: pausing until it resets"
+        mins = w.get("window_minutes") or 10080
+        elapsed = 1 - max(0.0, w.get("resets_at", time.time()) - time.time()) / (mins * 60)
+        # pro-rata, with a floor: just after a weekly reset the pro-rata pace would be ~0 and starve the manager
+        allowed = 100 * max(WEEKLY_CEILING * elapsed, WEEKLY_FLOOR)
+        used = w.get("used_percent", 0.0)
+        if used < 0.5 * allowed:
+            return FAST_S, f"weekly {used}% used, pace allows {allowed:.0f}%: working often"
+        if used < allowed:
+            return NORMAL_S, f"weekly {used}% used of a {allowed:.0f}% pace: normal"
+        if used < 1.2 * allowed:
+            return SLOW_S, f"weekly {used}% used, over a {allowed:.0f}% pace: slowing"
+        return CRAWL_S, f"weekly {used}% used, well over a {allowed:.0f}% pace: leaving the plan to the boss"
+
     def wake_reason(self) -> str | None:
         for e in ops.all_events(self.office, self.last_seen):
             if e["actor"] == self.me:
@@ -172,8 +241,10 @@ class Manager:
                 return f"a message from {e['actor']}"
             if e["kind"] in TRADER_NEWS:
                 return f"{e['actor']}: {e['kind']}"
-        if time.time() - self.last_turn >= HEARTBEAT_S:
-            return f"heartbeat (every {HEARTBEAT_S // 60} min)"
+        hb, why = self.pace()
+        self.pace_note = why
+        if time.time() - self.last_turn >= hb:
+            return f"heartbeat (every {hb // 60} min; {why})"
         return None
 
     def run(self):

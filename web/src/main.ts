@@ -6,6 +6,7 @@ import { addToLog, initPanel, refreshBoard, refreshBudget, refreshIterations, se
 import "./style.css";
 
 const scene = new OfficeScene();
+(window as any).office = scene;   // for looking at the room from the browser console; it can only animate, never write
 new Phaser.Game({
   type: Phaser.AUTO, parent: "room", width: W, height: H, backgroundColor: "#d9cbb4",
   pixelArt: true, scene, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_HORIZONTALLY },
