@@ -106,15 +106,25 @@ class Runner:
     def _open(self, side, size, max_hold_s=None):
         try:
             v, _ = strategy_version(self.ns, mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs)))
-            return self.office.open_position(side, float(size), v, max_hold_s)
+            r = self.office.open_position(side, float(size), v, max_hold_s)
+            self._refresh_positions()
+            return r
         except Refused as e:
             return {"error": str(e)}
 
     def _close(self, position_id):
         try:
-            return self.office.close_position(position_id)
+            r = self.office.close_position(position_id)
+            self._refresh_positions()
+            return r
         except Refused as e:
             return {"error": str(e)}
+
+    def _refresh_positions(self):
+        """Keep the facts true within a turn. Found live: the trader opened a position and then
+        saw positions_open still empty, because facts were written only before the turn."""
+        self.ns["positions_open"] = self.office.positions(self.me, open_only=True)
+        self.ns["my_closed"] = [p for p in self.office.positions(self.me) if p["closed_ts"]][:30]
 
     def _say(self, text, to=None):
         try:
