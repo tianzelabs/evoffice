@@ -9,6 +9,7 @@ chance for a lucky-looking result (spike 4's p = 0.044 that lost 22.5 bps a trad
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -71,7 +72,7 @@ def docker_runner(bars: Path, code: str) -> dict:
         return json.loads(lines[-1])
 
 
-def evaluate(store: Store, market, who: dict, code: str, runner=docker_runner) -> dict:
+def evaluate(store: Store, market, who: dict, code: str, runner=docker_runner, version: str | None = None) -> dict:
     if who["role"] != "trader":
         raise EvalRefused("only traders submit strategies for evaluation")
     if not code or len(code) > MAX_CODE:
@@ -82,6 +83,9 @@ def evaluate(store: Store, market, who: dict, code: str, runner=docker_runner) -
             raise EvalRefused(f"you have used all {PER_DAY} evaluations today")
         result = runner(heldout_file(market), code)
         result["evaluations_used_today"] = n + 1
+        # which candidate, and which strategy version the trader was on: what makes results comparable over time
+        result["candidate"] = hashlib.sha256(code.encode()).hexdigest()[:10]
+        result["version"] = version
         store.emit(who["id"], "evaluation", {k: v for k, v in result.items() if k != "reminder"})
     result["reminder"] = ("Aggregates only, over the 60 days ending 7 days ago -- data you cannot fetch. "
                           f"This is try {n + 1} today; the more tries, the more likely one looks good by chance.")

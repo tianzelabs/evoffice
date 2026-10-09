@@ -77,6 +77,20 @@ def test_simultaneous_calls_cannot_share_a_try(office):
     assert used == list(range(1, service.PER_DAY + 1)) and len(calls) == service.PER_DAY
 
 
+def test_iterations_tie_evaluations_to_the_version_they_were_made_under(office):
+    c, calls = office
+    c.post("/report", json={"kind": "version", "payload": {"version": "v1", "objects": ["should_wake"]}}, headers=H("t1"))
+    c.post("/evaluate", json={"code": "def decide(b): return None", "version": "v1"}, headers=H("t1"))
+    c.post("/report", json={"kind": "version", "payload": {"version": "v2", "objects": ["should_wake", "decide"]}}, headers=H("t1"))
+    c.post("/evaluate", json={"code": "def decide(b): return 1", "version": "v2"}, headers=H("t1"))
+    t = c.get("/iterations").json()["trader-1"]
+    assert [v["version"] for v in t["versions"]] == ["v1", "v2"]
+    assert [len(v["evaluations"]) for v in t["versions"]] == [1, 1]
+    assert t["versions"][0]["evaluations"][0]["candidate"] != t["versions"][1]["evaluations"][0]["candidate"]
+    assert t["summary"] == {"versions": 2, "evaluations": 2, "best_net_bps_per_trade": -2.0,
+                            "latest_net_bps_per_trade": -2.0, "any_interval_above_zero": False}
+
+
 def test_only_traders_submit(office):
     c, calls = office
     assert c.post("/evaluate", json={"code": "x"}, headers=H("m")).status_code == 409 and not calls

@@ -113,7 +113,7 @@ async function price() {
   catch (e) { $("#price").textContent = "offline"; }
 }
 async function budget() {
-  try { const b = await (await fetch("/budget")).json(); $("#budget").textContent = "budget today " + b.map((x) => `${x.role} $${x.spent_usd.toFixed(3)}/${x.cap_usd.toFixed(2)}`).join(" · "); } catch (e) {}
+  try { const b = await (await fetch("/budget")).json(); $("#budget").textContent = "budget today " + b.map((x) => `${x.employee} $${x.spent_usd.toFixed(3)}/${x.cap_usd.toFixed(2)}`).join(" · "); } catch (e) {}
 }
 async function whoami() {
   if (!token) return;

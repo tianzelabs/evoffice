@@ -142,7 +142,8 @@ class Runner:
 
     def _evaluate(self, code):
         try:
-            return self.office.evaluate(str(code))
+            v, _ = strategy_version(self.ns, mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs)))
+            return self.office.evaluate(str(code), v)
         except Refused as e:
             return {"error": str(e)}
 
@@ -328,11 +329,19 @@ class Runner:
             reasons.append(f"heartbeat (every {hb // 60} min)")
         return reasons
 
+    def rotate_log(self):
+        """One trajectory file per UTC day, so yesterday's can be compressed (~3-4 MB a turn)."""
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if getattr(self, "log_day", None) != day:
+            self.rlm.logger = RLMLogger(log_dir=str(STATE / "trajectories"), file_name=f"{self.me}_{day}")
+            self.log_day = day
+
     def turn(self, reasons: list[str]):
         # set first: a turn that fails anywhere still backs off by MIN_GAP_S instead of
         # retrying every minute (found live: a map bug re-woke the trader each minute)
         self.last_turn = time.time()
         self.turn_n += 1
+        self.rotate_log()
         a = self.ns.get("answer")
         if isinstance(a, dict):
             dict.__setitem__(a, "content", "")

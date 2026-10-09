@@ -2,7 +2,7 @@
 import * as Phaser from "phaser";
 import { allEvents, getJSON, stream } from "./net";
 import { OfficeScene, W, H } from "./office";
-import { addToLog, initPanel, refreshBoard, refreshBudget, setPrice } from "./panel";
+import { addToLog, initPanel, refreshBoard, refreshBudget, refreshIterations, setPrice } from "./panel";
 import "./style.css";
 
 const scene = new OfficeScene();
@@ -32,8 +32,9 @@ async function market() {
     addToLog(e);
     if (["open", "close", "fire", "hire"].includes(e.kind)) board();
     if (e.kind === "spend") refreshBudget();
+    if (["version", "evaluation", "close", "fire"].includes(e.kind)) refreshIterations().catch(() => {});
   });
-  board(); market(); refreshBudget();
+  board(); market(); refreshBudget(); refreshIterations().catch(() => {});
   setInterval(market, 15_000);
   setInterval(board, 60_000);
 })();

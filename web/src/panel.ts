@@ -56,7 +56,7 @@ export async function refreshBoard() {
 export async function refreshBudget() {
   try {
     const b = await getJSON("/budget");
-    $("#budget").textContent = b.map((x: any) => `${x.role} $${x.spent_usd.toFixed(3)}/${x.cap_usd.toFixed(2)}`).join(" · ");
+    $("#budget").textContent = "budget " + b.map((x: any) => `${x.employee} $${x.spent_usd.toFixed(3)}/${x.cap_usd.toFixed(2)}`).join(" · ");
   } catch { /* office offline */ }
 }
 
@@ -73,4 +73,41 @@ export async function initPanel() {
     const who = await whoami();
     $("#me").textContent = who ? `you: ${who}` : "";
   });
+}
+
+// ---------- did the change help? (/iterations) ----------
+function chart(series: any[]): string {
+  // one dot per held-out evaluation, whisker = 95% interval, dashed line = zero (the fee already paid)
+  const W = 330, H = 110, pad = 26;
+  if (!series.length) return `<div class="muted">no held-out evaluations yet</div>`;
+  const vals = series.flatMap((s) => [s.net_bps_per_trade, ...(s.ci95 ?? [])]).filter((v) => v != null);
+  const lo = Math.min(0, ...vals) - 2, hi = Math.max(0, ...vals) + 2;
+  const y = (v: number) => pad / 2 + (H - pad) * (1 - (v - lo) / (hi - lo));
+  const x = (i: number) => pad + (series.length === 1 ? (W - pad) / 2 : (i * (W - pad - 10)) / (series.length - 1));
+  const marks = series.map((s, i) => {
+    const c = s.ci95 && s.ci95[0] > 0 ? "var(--trader)" : "var(--boss)";
+    const whisker = s.ci95 ? `<line x1="${x(i)}" x2="${x(i)}" y1="${y(s.ci95[0])}" y2="${y(s.ci95[1])}" stroke="${c}" stroke-width="2"/>` : "";
+    return `${whisker}<circle cx="${x(i)}" cy="${y(s.net_bps_per_trade)}" r="4" fill="${c}"><title>${esc(s.ts.slice(5, 16))} · ${s.trades} trades · ${s.net_bps_per_trade} bps/trade${s.ci95 ? " [" + s.ci95.join(", ") + "]" : ""}${s.version ? " · version " + esc(s.version) : ""}</title></circle>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="iter-chart" role="img" aria-label="held-out results per evaluation">
+    <line x1="${pad}" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="var(--muted)" stroke-dasharray="4 3"/>
+    <text x="2" y="${y(0) + 4}" font-size="10" fill="var(--muted)">0</text>
+    <text x="2" y="${y(hi) + 10}" font-size="10" fill="var(--muted)">${hi.toFixed(0)}</text>
+    <text x="2" y="${y(lo)}" font-size="10" fill="var(--muted)">${lo.toFixed(0)}</text>${marks}</svg>`;
+}
+
+export async function refreshIterations() {
+  const it = await getJSON("/iterations");
+  $("#iterations").innerHTML = Object.entries(it).map(([trader, t]: [string, any]) => {
+    const s = t.summary;
+    const verdict = s.any_interval_above_zero ? `<span class="pos">an interval above zero</span>` : `<span class="muted">no edge shown yet</span>`;
+    const rows = t.versions.slice().reverse().map((v: any) => {
+      const ev = v.evaluations.map((e: any) => e.net_bps_per_trade == null ? "err" : `${e.net_bps_per_trade}`).join(", ");
+      return `<tr><td>${esc(v.version ? v.version.slice(0, 8) : "(no strategy)")}</td><td>${v.since ? esc(v.since.slice(5, 16).replace("T", " ")) : ""}</td><td title="${esc(v.objects.join(", "))}">${v.objects.length}</td><td>${ev || "–"}</td><td>${v.live.trades ?? 0}</td></tr>`;
+    }).join("");
+    return `<div class="iter"><div><b>${esc(trader)}</b> · ${s.versions} versions · ${s.evaluations} held-out tests · ${verdict}</div>
+      ${chart(t.evaluations)}
+      <div class="scroll-x"><table><thead><tr><th>version</th><th>since</th><th>obj</th><th>held-out bps</th><th>live</th></tr></thead><tbody>${rows || `<tr><td colspan="5" class="muted">no versions yet</td></tr>`}</tbody></table></div></div>`;
+  }).join("") || `<div class="muted">no traders</div>`;
+  return it;
 }

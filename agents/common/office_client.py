@@ -55,10 +55,10 @@ class Office:
     def close_position(self, position_id: int) -> dict:
         return self.post(f"/positions/{int(position_id)}/close")
 
-    def evaluate(self, code: str) -> dict:
+    def evaluate(self, code: str, version: str | None = None) -> dict:
         # a held-out run takes ~60 s; at the default 30 s the client gave up while the office
         # finished, recorded the result and spent one of the day's tries (found live)
-        return self.post("/evaluate", {"code": code}, timeout=300)
+        return self.post("/evaluate", {"code": code, "version": version}, timeout=300)
 
     def jev(self, state, questions: dict) -> dict:
         r = self.post("/llm/api/alpha/decisions", {"model": "typesafe/jev-1.13", "state": state, "questions": questions})

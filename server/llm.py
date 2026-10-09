@@ -22,7 +22,7 @@ import httpx
 from .store import Store
 
 UPSTREAM = "https://openrouter.ai"
-BUDGET_USD = {"trader": 0.30, "manager": 0.20}                    # per role, per UTC day
+BUDGET_USD = {"trader": 0.30, "manager": 0.20}                    # per EMPLOYEE, per UTC day (user, 2026-10-09)
 ALLOWED = {
     "trader": {"anthropic/claude-haiku-5.5", "typesafe/jev-1.13"},
     "manager": set(filter(None, os.environ.get("OFFICE_MANAGER_MODELS", "").split(","))) | {"typesafe/jev-1.13"},
@@ -52,17 +52,19 @@ def load_key() -> str:
     raise RuntimeError(f"OPENROUTER_API_KEY not found in env or {path}")
 
 
-def spent_today(store: Store, role: str) -> float:
+def spent_today(store: Store, employee: str) -> float:
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows = store.q("SELECT COALESCE(SUM(json_extract(payload, '$.cost')), 0) AS s FROM events "
-                   "WHERE kind = 'spend' AND ts >= ? AND json_extract(payload, '$.role') = ?", (day, role))
+                   "WHERE kind = 'spend' AND ts >= ? AND actor = ?", (day, employee))
     return float(rows[0]["s"])
 
 
-def budget(store: Store, role: str) -> dict:
+def budget(store: Store, employee: str, role: str) -> dict:
+    """Each employee has its own cap: a second trader adds a budget, it does not halve one."""
     cap = BUDGET_USD.get(role, 0.0)
-    s = spent_today(store, role)
-    return {"role": role, "spent_usd": round(s, 6), "cap_usd": cap, "left_usd": round(max(0.0, cap - s), 6)}
+    s = spent_today(store, employee)
+    return {"employee": employee, "role": role, "spent_usd": round(s, 6), "cap_usd": cap,
+            "left_usd": round(max(0.0, cap - s), 6)}
 
 
 class Gateway:
@@ -76,9 +78,9 @@ class Gateway:
         model = body.get("model", "")
         if model not in ALLOWED.get(role, set()):
             raise GatewayRefused(403, f"model {model!r} is not allowed for role {role!r}")
-        b = budget(self.store, role)
+        b = budget(self.store, who["id"], role)
         if b["left_usd"] <= 0:
-            raise GatewayRefused(429, f"today's {role} budget is spent (${b['spent_usd']:.4f} of ${b['cap_usd']:.2f})")
+            raise GatewayRefused(429, f"today's budget for {who['id']} is spent (${b['spent_usd']:.4f} of ${b['cap_usd']:.2f})")
         if body.get("stream"):
             raise GatewayRefused(400, "streaming is not supported; cost must be read from the response")
         if route == "chat":

@@ -63,7 +63,7 @@ def test_the_budget_is_a_wall(office):
     for _ in range(3):                                  # 3 x $0.12 crosses the $0.30 trader cap
         c.post("/llm/v1/chat/completions", json=big, headers=H("t1"))
     r = c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1"))
-    assert r.status_code == 429 and "budget is spent" in r.json()["detail"]
+    assert r.status_code == 429 and "budget for trader-1 is spent" in r.json()["detail"]
     assert len(seen) == 3                               # the refused call never left the office
 
 
@@ -76,6 +76,20 @@ def test_output_length_is_capped_by_the_office(office):
     assert bodies[0]["max_tokens"] == llm.MAX_OUTPUT_TOKENS["trader"]          # absent -> the cap
     assert bodies[1]["max_completion_tokens"] == llm.MAX_OUTPUT_TOKENS["trader"]  # too big -> the cap
     assert bodies[2]["max_tokens"] == 100                                       # smaller -> kept
+
+
+def test_each_trader_has_its_own_budget(tmp_path):
+    def upstream(request):
+        return httpx.Response(200, json={"choices": [{"message": {"content": "x"}}],
+                                         "usage": {"prompt_tokens": 1, "completion_tokens": 1, "cost": 0.12}})
+    tokens = {"t1": {"id": "trader-1", "role": "trader"}, "t2": {"id": "trader-2", "role": "trader"}}
+    store = Store(str(tmp_path / "o.db"))
+    gw = llm.Gateway(store, key="k", transport=httpx.MockTransport(upstream))
+    c = TestClient(create_app(store, FakeMarket(), tokens, backstop_every_s=0, gateway=gw))
+    for _ in range(3):
+        c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1"))
+    assert c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1")).status_code == 429
+    assert c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t2")).status_code == 200   # untouched by trader-1
 
 
 def test_streaming_is_refused_because_its_cost_could_not_be_read(office):

@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import leaderboard, positions, staff
+from . import iterations, leaderboard, positions, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import ClickHouseMarket, Stale
@@ -60,6 +60,7 @@ class Fire(BaseModel):
 
 class Evaluate(BaseModel):
     code: str
+    version: str | None = None
 
 
 class Open(BaseModel):
@@ -171,6 +172,11 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     def board():
         return leaderboard.standings(store)
 
+    @app.get("/iterations")
+    def iteration_timeline():
+        """Each trader's strategy versions with their held-out evaluations: did the change help?"""
+        return iterations.timeline(store)
+
     @app.get("/bars")
     async def bars(minutes: int = 60, pair: str = "BTC/USD"):
         try:
@@ -212,17 +218,18 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     async def evaluate(body: Evaluate, w: dict = Depends(who)):
         """Score a strategy (code defining decide(bars)) on the held-out window. Aggregates only."""
         try:
-            return await run_in_threadpool(evaluation.evaluate, store, market, w, body.code, eval_runner)
+            return await run_in_threadpool(evaluation.evaluate, store, market, w, body.code, eval_runner, body.version)
         except evaluation.EvalRefused as e:
             raise HTTPException(409, str(e))
 
     @app.get("/budget")
     def budgets():
-        return [budget(store, r) for r in ("trader", "manager")]
+        rows = store.q("SELECT id, role FROM employees WHERE role != 'boss' AND fired_ts IS NULL ORDER BY id")
+        return [budget(store, r["id"], r["role"]) for r in rows]
 
     @app.get("/budget/me")
     def my_budget(w: dict = Depends(who)):
-        return budget(store, w["role"])
+        return budget(store, w["id"], w["role"])
 
     async def _llm(route: str, request: Request, w: dict):
         try:

@@ -1,0 +1,7 @@
+[Unit]
+Description=Pixel Office -- daily housekeeping (ledger backup, log rotation, cache pruning)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/pixel-office-home/pixel-office
+ExecStart=%h/pixel-office-home/pixel-office/.venv/bin/python ops/housekeeping.py

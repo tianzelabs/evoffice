@@ -30,6 +30,10 @@ table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 th, td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
 .pos { color: var(--trader); } .neg { color: var(--boss); }
+aside { overflow: auto; }
+.iter { margin-bottom: 14px; }
+.scroll-x { overflow-x: auto; }
+.iter-chart { width: 100%; height: auto; margin: 6px 0; background: var(--bg); border-radius: 6px; }
 @media (max-width: 900px) {
   main { grid-template-columns: 1fr; height: auto; }
   aside { border-left: 0; border-top: 1px solid var(--line); }
