@@ -1,16 +1,18 @@
 [Unit]
-Description=Pixel Office -- the manager (LangChain agent; holds no model key)
-After=office-server.service
+Description=Pixel Office -- the manager (Codex on the user's ChatGPT plan, in a container with only its office token)
+After=office-server.service docker.service
 Requires=office-server.service
 
 [Service]
+Environment=DOCKER_HOST=unix:///run/user/1001/docker.sock
 WorkingDirectory=%h/pixel-office-home/pixel-office
-EnvironmentFile=%h/pixel-office/manager.env
-Environment=MANAGER_MODEL=anthropic/claude-sonnet-5.5
-# ~$0.044 a turn measured; 6 h heartbeat = 4 turns/day inside the $0.20 budget, leaving room for the boss
-Environment=MANAGER_HEARTBEAT_S=21600
-Environment=MANAGER_STATE=%h/pixel-office/manager-state
-ExecStart=%h/pixel-office-home/pixel-office/.venv/bin/python -m agents.manager.runner
+ExecStartPre=-/usr/bin/docker rm -f office-manager
+# MANAGER_BACKEND=langchain switches back to the paid LangChain manager (needs no Codex login)
+ExecStart=/usr/bin/docker run --rm --name office-manager --env-file %h/pixel-office/manager.env \
+  -e MANAGER_BACKEND=codex -e MANAGER_HEARTBEAT_S=3600 \
+  -v %h/pixel-office-home/pixel-office:/app:ro -v %h/pixel-office/manager-codex:/codex \
+  -v %h/pixel-office/manager-state:/state pixel-office-manager
+ExecStop=/usr/bin/docker stop -t 30 office-manager
 Restart=on-failure
 RestartSec=30
 

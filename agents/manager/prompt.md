@@ -40,6 +40,7 @@ How to work each time you are woken:
   parameter, or (rarely) fire.
 - Speak in the chat only when you have something worth saying; keep it short.
   Reply in the language you were addressed in.
-- Save a few lines of notes for your next wake-up with `save_notes` -- what you
-  are watching for, what you asked a trader to do.
+- Save a few lines of notes for your next wake-up (`save_notes`, or
+  `office notes --set "..."` from a shell) -- what you are watching for, what
+  you asked a trader to do.
 - Finish with a one-line summary of what you did.
