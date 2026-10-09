@@ -20,6 +20,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import leaderboard, positions, staff
@@ -29,6 +30,7 @@ from .market import ClickHouseMarket, Stale
 from .store import Store
 
 STATIC = Path(__file__).with_name("static")
+WEB = Path(__file__).resolve().parents[1] / "web" / "dist"     # the pixel office (P3), built by `npm run build`
 MAX_SAY = 2000
 
 
@@ -99,7 +101,15 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
 
     @app.get("/")
     def index():
+        page = WEB / "index.html"
+        # revalidate the page every time; its assets are content-hashed, so a new build is picked up at once
+        return FileResponse(page if page.exists() else STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/text")
+    def text_view():
         return FileResponse(STATIC / "index.html")
+
+    app.mount("/assets", StaticFiles(directory=WEB / "assets", check_dir=False), name="assets")
 
     @app.get("/me")
     def me(w: dict = Depends(who)):

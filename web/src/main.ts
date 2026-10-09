@@ -1,0 +1,39 @@
+// Boot: replay the office's history into the room without animation, then go live.
+import * as Phaser from "phaser";
+import { allEvents, getJSON, stream } from "./net";
+import { OfficeScene, W, H } from "./office";
+import { addToLog, initPanel, refreshBoard, refreshBudget, setPrice } from "./panel";
+import "./style.css";
+
+const scene = new OfficeScene();
+new Phaser.Game({
+  type: Phaser.AUTO, parent: "room", width: W, height: H, backgroundColor: "#d9cbb4",
+  pixelArt: true, scene, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_HORIZONTALLY },
+});
+
+async function board() { try { scene.setBoard(await refreshBoard()); } catch { /* offline */ } }
+
+async function market() {
+  try {
+    const [p, bars] = await Promise.all([getJSON("/price"), getJSON("/bars?minutes=90")]);
+    setPrice(`BTC ${p.price.toFixed(1)}`);
+    scene.setChart(bars, p.price);
+  } catch { setPrice("BTC feed stale"); }
+}
+
+(async () => {
+  await initPanel();
+  await scene.ready;
+  const history = await allEvents();
+  for (const e of history) { scene.apply(e, false); addToLog(e); }
+  const last = history.length ? history[history.length - 1].id : 0;
+  stream(last, (e) => {
+    scene.apply(e, true);
+    addToLog(e);
+    if (["open", "close", "fire", "hire"].includes(e.kind)) board();
+    if (e.kind === "spend") refreshBudget();
+  });
+  board(); market(); refreshBudget();
+  setInterval(market, 15_000);
+  setInterval(board, 60_000);
+})();

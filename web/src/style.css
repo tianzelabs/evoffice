@@ -1,0 +1,37 @@
+:root { --bg: #f4efe6; --panel: #fffdf8; --fg: #1d1d1f; --muted: #6e6e73; --line: #e2dccf;
+        --boss: #b3261e; --manager: #1a5fb4; --trader: #26734d; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #17161a; --panel: #1f1e23; --fg: #ececf0; --muted: #9a9aa2; --line: #2e2c33;
+          --boss: #ff8a80; --manager: #8ab4f8; --trader: #81c995; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+header { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; margin: 0; }
+#price { font-weight: 600; }
+.muted { color: var(--muted); }
+a.muted { margin-left: auto; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; height: calc(100vh - 40px); }
+#room { min-width: 0; display: flex; align-items: flex-start; justify-content: center; padding: 8px; }
+#room canvas { max-width: 100%; height: auto !important; image-rendering: pixelated; border-radius: 6px; }
+aside { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); }
+aside section { padding: 10px 14px; }
+.chat { flex: 1; display: flex; flex-direction: column; min-height: 0; border-bottom: 1px solid var(--line); }
+h2 { font-size: 11px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+#log { flex: 1; overflow: auto; min-height: 160px; }
+.ev { padding: 2px 0; word-break: break-word; }
+.ev .t { color: var(--muted); margin-right: 6px; }
+.who-boss { color: var(--boss); font-weight: 700; } .who-manager { color: var(--manager); font-weight: 700; }
+.who-trader { color: var(--trader); font-weight: 700; } .who-office, .sys { color: var(--muted); }
+form { display: flex; gap: 6px; margin-top: 8px; }
+input { flex: 1; min-width: 0; padding: 7px; font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; }
+button { padding: 7px 12px; font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+th, td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+.pos { color: var(--trader); } .neg { color: var(--boss); }
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; height: auto; }
+  aside { border-left: 0; border-top: 1px solid var(--line); }
+  #log { max-height: 50vh; }
+}

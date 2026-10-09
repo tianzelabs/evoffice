@@ -10,8 +10,9 @@ Environment=OFFICE_TOKENS=%h/pixel-office/tokens.json
 Environment=DOCKER_HOST=unix:///run/user/1001/docker.sock
 # models the manager may call through /llm (traders' list is fixed in server/llm.py)
 Environment=OFFICE_MANAGER_MODELS=anthropic/claude-sonnet-5.5,deepseek/deepseek-v4-pro,moonshotai/kimi-k2.6
+# open SSE streams (every browser tab) would otherwise hold a restart for 90 s until SIGKILL
 # Tailscale address only: the office is reachable from the user's tailnet, not the internet.
-ExecStart=%h/pixel-office-home/pixel-office/.venv/bin/uvicorn server.app:app --host 100.86.90.65 --port 8710 --log-level info
+ExecStart=%h/pixel-office-home/pixel-office/.venv/bin/uvicorn server.app:app --host 100.86.90.65 --port 8710 --log-level info --timeout-graceful-shutdown 3
 Restart=on-failure
 RestartSec=5
 
