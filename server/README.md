@@ -14,6 +14,8 @@ model, settlement, the ledger, or a budget.
 | file | owns |
 |---|---|
 | `app.py` | HTTP routes and the SSE event stream |
+| `store.py` | the one SQLite connection: query, write, `emit` an event, hire |
+| `static/index.html` | P0's plain-text page: chat (the boss can post), leaderboard, price |
 | `schema.sql` | `employees`, `positions`, `events` |
 | `events.py` | append an event, read events since an id, fan out to SSE subscribers |
 | `positions.py` | open / close a position; max-hold backstop; void when no price |

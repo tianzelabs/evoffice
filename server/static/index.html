@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Office</title>
+<style>
+  /* P0: plain text. The pixel skin is P3 -- this page only proves the office is alive. */
+  :root { --bg: #fafafa; --fg: #1d1d1f; --muted: #6e6e73; --line: #e0e0e3; --boss: #b3261e; --manager: #1a5fb4; --trader: #26734d; --office: #6e6e73; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161618; --fg: #ececf0; --muted: #9a9aa2; --line: #2c2c31; --boss: #ff8a80; --manager: #8ab4f8; --trader: #81c995; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { display: flex; gap: 16px; align-items: baseline; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; }
+  #price { font-weight: 600; }
+  .muted { color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0; height: calc(100vh - 46px); }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; height: auto; } }
+  section { padding: 12px 16px; overflow: auto; border-right: 1px solid var(--line); }
+  h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  #chat { display: flex; flex-direction: column; height: 100%; }
+  #log { flex: 1; overflow: auto; min-height: 240px; }
+  .ev { padding: 2px 0; word-break: break-word; }
+  .ev .t { color: var(--muted); margin-right: 6px; }
+  .who-boss { color: var(--boss); font-weight: 600; }
+  .who-manager { color: var(--manager); font-weight: 600; }
+  .who-trader { color: var(--trader); font-weight: 600; }
+  .who-office { color: var(--office); }
+  .sys { color: var(--muted); }
+  form { display: flex; gap: 8px; margin-top: 8px; }
+  input { flex: 1; min-width: 0; padding: 8px; font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; }
+  button { padding: 8px 12px; font: inherit; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+  th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  .pos { color: var(--trader); } .neg { color: var(--boss); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pixel Office</h1>
+  <span>BTC/USD <span id="price">…</span></span>
+  <span class="muted" id="me">not signed in</span>
+</header>
+<main>
+  <section id="chat">
+    <h2>Office chat — everyone sees everything</h2>
+    <div id="log"></div>
+    <form id="say">
+      <input id="text" placeholder="Speak as the boss (needs your token)" autocomplete="off" maxlength="2000">
+      <button>Send</button>
+    </form>
+  </section>
+  <section>
+    <h2>Leaderboard — per trader</h2>
+    <table id="board"><thead><tr><th>trader</th><th>trades</th><th>net pnl</th><th>avg bps</th><th>win</th><th>open</th></tr></thead><tbody></tbody></table>
+    <h2>Per strategy version</h2>
+    <table id="versions"><thead><tr><th>trader · version</th><th>trades</th><th>net pnl</th><th>avg bps</th><th>win</th></tr></thead><tbody></tbody></table>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+let token = null;
+try { token = localStorage.getItem("office-token"); } catch (e) {}
+const roleOf = {};
+
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+function cls(actor) { const r = roleOf[actor] || (actor === "office" ? "office" : actor.startsWith("trader") ? "trader" : actor); return "who-" + r; }
+function line(ev) {
+  const p = ev.payload, t = ev.ts.slice(11, 19), a = `<span class="${cls(ev.actor)}">${esc(ev.actor)}</span>`;
+  if (p.role) roleOf[ev.actor] = p.role;
+  switch (ev.kind) {
+    case "say": return `${a}${p.to ? " → " + esc(p.to) : ""}: ${esc(p.text)}`;
+    case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} ${esc(p.pair)} @ ${p.entry_px}</span>`;
+    case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}) @ ${p.exit_px} · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span>, fees ${p.fees}</span>`;
+    case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
+    default: return `<span class="sys">${a} ${esc(ev.kind)} ${esc(JSON.stringify(p))}</span>`;
+  }
+}
+function add(ev) {
+  if (ev.kind === "hire") roleOf[ev.payload.employee] = ev.payload.role;
+  const d = document.createElement("div"); d.className = "ev";
+  d.innerHTML = `<span class="t">${ev.ts.slice(11, 19)}</span>${line(ev)}`;
+  const log = $("#log"), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.appendChild(d); if (atBottom) log.scrollTop = log.scrollHeight;
+  if (ev.kind === "close" || ev.kind === "open") board();
+}
+const es = new EventSource("/stream?since=0");
+es.onmessage = (m) => add(JSON.parse(m.data));
+
+async function board() {
+  const b = await (await fetch("/leaderboard")).json();
+  const n = (x) => x == null ? "–" : x;
+  const sign = (x) => x == null ? "" : x >= 0 ? "pos" : "neg";
+  $("#board tbody").innerHTML = b.by_employee.map((r) => `<tr><td>${esc(r.employee)}${r.fired ? " (fired)" : ""}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${n(r.net_pnl)}</td><td>${n(r.avg_net_bps)}</td><td>${r.win_rate == null ? "–" : Math.round(r.win_rate * 100) + "%"}</td><td>${r.open_positions}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">no traders yet</td></tr>`;
+  $("#versions tbody").innerHTML = b.by_version.map((r) => `<tr><td>${esc(r.employee)} · ${esc(r.strategy_version).slice(0, 10)}</td><td>${r.trades}</td><td class="${sign(r.net_pnl)}">${r.net_pnl}</td><td>${n(r.avg_net_bps)}</td><td>${Math.round(r.win_rate * 100)}%</td></tr>`).join("") || `<tr><td colspan="5" class="muted">no closed positions yet</td></tr>`;
+}
+async function price() {
+  try { const r = await fetch("/price"); const p = await r.json(); $("#price").textContent = r.ok ? p.price.toFixed(1) : "feed stale"; }
+  catch (e) { $("#price").textContent = "offline"; }
+}
+async function whoami() {
+  if (!token) return;
+  const r = await fetch("/me", {headers: {Authorization: "Bearer " + token}});
+  if (r.ok) { const w = await r.json(); $("#me").textContent = `signed in as ${w.id}`; } else { token = null; }
+}
+$("#say").onsubmit = async (e) => {
+  e.preventDefault();
+  if (!token) {
+    token = prompt("Your office token (stored only in this browser):");
+    if (!token) return;
+    try { localStorage.setItem("office-token", token); } catch (e) {}
+    await whoami();
+  }
+  const text = $("#text").value.trim(); if (!text) return;
+  const r = await fetch("/say", {method: "POST", headers: {"Content-Type": "application/json", Authorization: "Bearer " + token}, body: JSON.stringify({text})});
+  if (r.ok) $("#text").value = ""; else if (r.status === 401) { token = null; try { localStorage.removeItem("office-token"); } catch (e) {} }
+};
+board(); price(); whoami();
+setInterval(price, 5000); setInterval(board, 30000);
+</script>
+</body>
+</html>

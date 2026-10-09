@@ -1,0 +1,146 @@
+"""The office server: HTTP for every act, SSE for everything that happened.
+
+Everyone -- trader, manager, the web page, the boss -- is a client with the same
+standing, and can do exactly what these routes offer. There is deliberately no
+route that edits fees, settlement, prices, budgets or the ledger: that absence
+is what makes "the manager cannot demolish the office" structural.
+
+Run:  OFFICE_DB=~/pixel-office/office.db OFFICE_TOKENS=~/pixel-office/tokens.json \
+      uvicorn server.app:app --host 0.0.0.0 --port 8710
+tokens.json: {"<token>": {"id": "boss", "role": "boss"}, ...}  -- kept outside the repo.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+from . import leaderboard, positions
+from .market import ClickHouseMarket, Stale
+from .store import Store
+
+STATIC = Path(__file__).with_name("static")
+MAX_SAY = 2000
+
+
+class Say(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_SAY)
+    to: str | None = None
+
+
+class Open(BaseModel):
+    side: str
+    size: float
+    pair: str = "BTC/USD"
+    strategy_version: str | None = None
+    max_hold_s: int | None = Field(default=None, gt=0)
+
+
+def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: float = 10.0) -> FastAPI:
+    for who in tokens.values():
+        store.hire(who["id"], who["role"])
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        async def backstop():
+            while True:
+                await asyncio.sleep(backstop_every_s)
+                await run_in_threadpool(positions.enforce_max_hold, store, market)
+        task = asyncio.create_task(backstop()) if backstop_every_s > 0 else None
+        yield
+        if task:
+            task.cancel()
+
+    app = FastAPI(title="pixel-office", lifespan=lifespan)
+
+    def who(authorization: str | None = Header(default=None)) -> dict:
+        token = (authorization or "").removeprefix("Bearer ").strip()
+        if token not in tokens:
+            raise HTTPException(401, "unknown token")
+        return tokens[token]
+
+    def refused(e: Exception) -> HTTPException:
+        return HTTPException(409, str(e))
+
+    @app.get("/")
+    def index():
+        return FileResponse(STATIC / "index.html")
+
+    @app.get("/me")
+    def me(w: dict = Depends(who)):
+        return w
+
+    @app.get("/events")
+    def events(since: int = 0):
+        return store.events_since(since)
+
+    @app.get("/stream")
+    async def stream(request: Request, since: int = 0):
+        """SSE. Polls the events table: a few clients, one writer, no fan-out machinery."""
+        async def gen():
+            last, idle = since, 0
+            while not await request.is_disconnected():
+                rows = await run_in_threadpool(store.events_since, last)
+                for r in rows:
+                    last = r["id"]
+                    yield f"id: {r['id']}\ndata: {json.dumps(r, ensure_ascii=False)}\n\n"
+                idle = 0 if rows else idle + 1
+                if idle and idle % 30 == 0:
+                    yield ": keepalive\n\n"
+                await asyncio.sleep(0.5)
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.post("/say")
+    def say(body: Say, w: dict = Depends(who)):
+        return store.emit(w["id"], "say", {"text": body.text, "to": body.to, "role": w["role"]})
+
+    @app.get("/price")
+    async def price(pair: str = "BTC/USD"):
+        try:
+            q = await run_in_threadpool(market.quote, pair)
+        except (Stale, ValueError) as e:
+            raise HTTPException(503, str(e))
+        return {"pair": q.pair, "price": q.price, "age_s": round(q.age_s, 2)}
+
+    @app.post("/positions/open")
+    async def open_(body: Open, w: dict = Depends(who)):
+        try:
+            return await run_in_threadpool(positions.open_position, store, market, w["id"], body.pair,
+                                           body.side, body.size, body.strategy_version, body.max_hold_s)
+        except positions.Refused as e:
+            raise refused(e)
+
+    @app.post("/positions/{position_id}/close")
+    async def close(position_id: int, w: dict = Depends(who)):
+        try:
+            return await run_in_threadpool(positions.close_position, store, market, position_id, w["id"], "self")
+        except positions.Refused as e:
+            raise refused(e)
+
+    @app.get("/positions")
+    def listing(employee: str | None = None, open: bool = False):
+        return positions.listing(store, employee, open)
+
+    @app.get("/leaderboard")
+    def board():
+        return leaderboard.standings(store)
+
+    return app
+
+
+def _from_env() -> FastAPI:
+    db = os.path.expanduser(os.environ.get("OFFICE_DB", "~/pixel-office/office.db"))
+    os.makedirs(os.path.dirname(db), exist_ok=True)
+    tokens = json.loads(Path(os.path.expanduser(os.environ.get("OFFICE_TOKENS", "~/pixel-office/tokens.json"))).read_text())
+    return create_app(Store(db), ClickHouseMarket(), tokens)
+
+
+app = _from_env() if os.environ.get("OFFICE_DB") or os.environ.get("OFFICE_TOKENS") else None
