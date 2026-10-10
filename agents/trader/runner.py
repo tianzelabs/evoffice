@@ -52,6 +52,45 @@ local_repl._SAFE_BUILTINS["__build_class__"] = builtins.__build_class__
 for _name in ("exec", "eval", "compile", "globals", "locals"):
     local_repl._SAFE_BUILTINS[_name] = getattr(builtins, _name)
 
+
+# ONE LIVE NAMESPACE. rlms executes every cell in a fresh {**globals, **locals} copy, so a function
+# defined in a cell keeps THAT copy as its __globals__: it sees facts (positions_open, my_orders,
+# office_time, ...) as they were when it was defined, forever. Found live (2026-10-10): the manager's
+# minute-by-minute execution rules could never have seen a position they opened, so their stop-loss
+# could never fire. Every cell now runs in one persistent dict, refreshed from globals/locals first,
+# and the runner pushes fresh facts into it before calling should_wake.
+def live_ns(env) -> dict:
+    d = getattr(env, "_office_live", None)
+    if d is None:
+        d = env._office_live = {}
+    return d
+
+
+def _execute_code(self, code: str):
+    start = time.perf_counter()
+    self._pending_llm_calls = []
+    live = live_ns(self)
+    live.update(self.globals)
+    live.update(self.locals)
+    with self._capture_output() as (stdout_buf, stderr_buf), self._temp_cwd():
+        try:
+            exec(code, live, live)
+            for key, value in live.items():
+                if key not in self.globals and not key.startswith("_"):
+                    self.locals[key] = value
+            self._restore_scaffold()
+            stdout, stderr = stdout_buf.getvalue(), stderr_buf.getvalue()
+        except Exception as e:
+            stdout, stderr = stdout_buf.getvalue(), stderr_buf.getvalue() + f"\n{type(e).__name__}: {e}"
+    live.update(self.globals)                  # scaffold names restored in the live dict too
+    final, self._last_final_answer = self._last_final_answer, None
+    return local_repl.REPLResult(stdout=stdout, stderr=stderr, locals=self.locals.copy(),
+                                 execution_time=time.perf_counter() - start,
+                                 rlm_calls=self._pending_llm_calls.copy(), final_answer=final)
+
+
+local_repl.LocalREPL.execute_code = _execute_code
+
 HERE = Path(__file__).parent
 MODEL = os.environ.get("TRADER_MODEL", "anthropic/claude-haiku-5.5")
 STATE = Path(os.environ.get("TRADER_STATE", "/state"))
@@ -147,7 +186,10 @@ class Runner:
     def _place(self, intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60):
         try:
             v, _ = strategy_version(self.ns, mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs)))
-            r = self.office.place_order(intent, float(price), size, side, position_id, bool(post_only), ttl_minutes, v)
+            # "best"/"bid"/"ask" are resolved by the office against the book when the order arrives (found live:
+            # float(price) here turned price="best" into a ValueError before the office ever saw it)
+            px = price if isinstance(price, str) else float(price)
+            r = self.office.place_order(intent, px, size, side, position_id, bool(post_only), ttl_minutes, v)
             self._refresh_positions()
             return r
         except Refused as e:
@@ -175,6 +217,7 @@ class Runner:
         self.ns["positions_open"] = self.office.positions(self.me, open_only=True)
         self.ns["my_closed"] = [p for p in self.office.positions(self.me) if p["closed_ts"]][:30]
         self.ns["my_orders"] = self.office.orders(self.me, open_only=True)
+        self.sync_live()
 
     def _say(self, text, to=None):
         try:
@@ -256,7 +299,9 @@ class Runner:
         p = STATE / "objects.dill"
         if p.exists():
             saved = dill.loads(p.read_bytes())
+            self._rebind(saved)
             self.ns.update(saved)
+            self.sync_live()
             log(f"restored {len(saved)} objects: {sorted(saved)}")
             self.notes.append(f"the office restarted; your objects were restored: {', '.join(sorted(saved)) or 'none'}")
         h = STATE / "history.dill"
@@ -270,13 +315,14 @@ class Runner:
         # recurse=True pickles only the globals a function actually uses. Without it dill pickles
         # the REPL's whole global dict -- which holds the office tools and their HTTP client -- and
         # every function and class fails (found live: should_wake vanished on the first restart).
-        keep, lost = {}, []
+        keep, lost, memo = {}, [], {}
         for k in own:
             if isinstance(self.ns[k], (types.ModuleType, io.IOBase)):
                 continue          # re-importable, or a handle that means nothing after a restart
             try:
-                dill.dumps(self.ns[k], recurse=True)
-                keep[k] = self.ns[k]
+                v = self._portable(self.ns[k], memo)
+                dill.dumps(v, recurse=True)
+                keep[k] = v
             except Exception as e:
                 lost.append(f"{k} ({type(e).__name__})")
         (STATE / "objects.dill").write_bytes(dill.dumps(keep, recurse=True))
@@ -288,6 +334,62 @@ class Runner:
                                                        "repl_seen": self.repl_seen}))
         if lost:   # never `except: pass` -- tell the trader what a restart would erase
             self.notes.append("these objects could not be saved and would be lost on a restart: " + ", ".join(lost))
+
+    def _skip_names(self) -> set:
+        return set(self.tool_sigs) | set(self.facts) | {"llm_query", "llm_query_batched", "rlm_query",
+                                                         "rlm_query_batched", "SHOW_VARS", "answer", "__builtins__"}
+
+    def _portable(self, obj, memo: dict):
+        """A REPL function, for saving: its globals without the office's tools and facts (which hold a live
+        HTTP client and cannot be pickled -- found live: should_wake calling place_order was silently
+        dropped on restart, and with it the manager's whole execution rule). Restore re-attaches them."""
+        if not isinstance(obj, types.FunctionType):
+            return obj
+        if id(obj) in memo:
+            return memo[id(obj)]
+        g: dict = {}
+        f = types.FunctionType(obj.__code__, g, obj.__name__, obj.__defaults__, obj.__closure__)
+        memo[id(obj)] = f
+        skip = self._skip_names()
+        for name in obj.__code__.co_names:
+            if name in obj.__globals__ and name not in skip:
+                g[name] = self._portable(obj.__globals__[name], memo)
+        for code in [c for c in obj.__code__.co_consts if isinstance(c, types.CodeType)]:   # nested defs
+            for name in code.co_names:
+                if name in obj.__globals__ and name not in skip and name not in g:
+                    g[name] = self._portable(obj.__globals__[name], memo)
+        f.__kwdefaults__, f.__dict__ = obj.__kwdefaults__, dict(obj.__dict__)
+        return f
+
+    def _rebind(self, saved: dict):
+        """Point restored REPL functions at the one live namespace, so they see today's tools and facts."""
+        live = live_ns(self.rlm._persistent_env)
+        for k, v in saved.items():
+            # defined in the REPL (or saved portable): not a library function, which keeps its module's globals
+            if isinstance(v, types.FunctionType) and v.__globals__.get("__name__") in (None, "__main__"):
+                f = types.FunctionType(v.__code__, live, v.__name__, v.__defaults__, v.__closure__)
+                f.__kwdefaults__, f.__dict__ = v.__kwdefaults__, dict(v.__dict__)
+                saved[k] = f
+
+    def sync_live(self):
+        """Push the namespace's current values into the live dict REPL functions read."""
+        env = self.rlm._persistent_env
+        live = live_ns(env)
+        live.update(env.globals)
+        live.update(env.locals)
+
+    def refresh_for_rules(self):
+        """Tool mode: should_wake may BE the execution rule, so its view of the world is refreshed every
+        minute -- bars, positions, orders, the quote, the clock -- not only before a model turn."""
+        ns = self.ns
+        ns["bars_1m"] = list(self.bars)
+        self._refresh_positions()
+        try:
+            ns["price_now"] = self.office.price()
+        except Refused as e:
+            ns["price_now"] = {"error": str(e)}
+        ns["office_time"] = utc()
+        self.sync_live()
 
     # ---------- the manager's authority, as the runner obeys it ----------
     def check_employment(self):
@@ -372,6 +474,7 @@ class Runner:
         for name, (value, meaning, note) in facts.items():
             ns[name] = value
             self.facts[name] = (meaning, now, note)
+        self.sync_live()
 
     def _my_events(self, kind: str) -> list[dict]:
         out, since = [], 0
@@ -424,6 +527,7 @@ class Runner:
         sw = self.ns.get("should_wake")
         if callable(sw) and on_duty():
             try:
+                self.refresh_for_rules()
                 fired = bool(sw(list(self.bars)))
                 self.last_trigger_error = None
             except Exception as e:
