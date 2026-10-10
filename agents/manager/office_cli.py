@@ -13,6 +13,9 @@
     office backtest FILE [--data train|recent] [--days N]
                                          run a decide(bars) strategy file through the office's own simulator
                                          (same fees and fills as the held-out exam) on data you may see
+    office repl CODE | -f FILE           run Python in the office's SHARED REPL (the same namespace the
+                                         trader works in) and print its output
+    office repl-result ID                the output of an earlier repl run
     office task TRADER TEXT [--wait S]   give the trader a task; it runs one turn in its REPL and you get the
                                          result (waits up to S seconds, default 600)
     office task-result ID                the result of an earlier task
@@ -44,6 +47,9 @@ def main(argv: list[str]) -> str:
     od = sub.add_parser("orders"); od.add_argument("trader")
     sub.add_parser("objective")
     gl = sub.add_parser("golive"); gl.add_argument("trader")
+    rp = sub.add_parser("repl"); rp.add_argument("code", nargs="?"); rp.add_argument("-f", "--file")
+    rp.add_argument("--wait", type=int, default=300)
+    rr = sub.add_parser("repl-result"); rr.add_argument("id", type=int)
     tk = sub.add_parser("task"); tk.add_argument("trader"); tk.add_argument("text"); tk.add_argument("--wait", type=int, default=600)
     tr = sub.add_parser("task-result"); tr.add_argument("id", type=int)
     bt = sub.add_parser("backtest"); bt.add_argument("file"); bt.add_argument("--data", default="train")
@@ -67,6 +73,10 @@ def main(argv: list[str]) -> str:
     if args.cmd == "objective": return json.dumps(o.get("/objective"), ensure_ascii=False)
     if args.cmd == "golive": return ops.golive(o, args.trader)
     if args.cmd == "market": return ops.market(o, args.minutes)
+    if args.cmd == "repl":
+        code = open(args.file).read() if args.file else args.code
+        return ops.repl(o, code, args.wait) if code else "give CODE or -f FILE"
+    if args.cmd == "repl-result": return ops.repl_result(o, args.id)
     if args.cmd == "task": return ops.task(o, args.trader, args.text, args.wait)
     if args.cmd == "task-result": return ops.task_result(o, args.id)
     if args.cmd == "backtest": return ops.backtest(o, open(args.file).read(), args.data, args.days)

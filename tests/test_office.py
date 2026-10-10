@@ -139,3 +139,13 @@ def test_the_objective_ladder_starts_at_the_bottom_and_climbs_on_the_record(offi
                                             "candidate": "abc", "error": None})
     o = c.get("/objective").json()
     assert o["rung"] == 1 and o["rungs"][0]["best"]["both_windows_min_bps"] == 0.4
+
+
+def test_the_shared_repl_takes_code_from_the_manager_and_returns_output(office):
+    c, _, _ = office
+    assert c.post("/repl", json={"code": "print(1)"}, headers=H("t1")).status_code == 403
+    r = c.post("/repl", json={"code": "x = 2\nprint(x)"}, headers=H("m")).json()
+    assert r["kind"] == "repl" and r["payload"]["lines"] == 2
+    assert c.get(f"/repl/{r['id']}").json()["status"] == "pending"
+    c.post("/report", json={"kind": "repl_result", "payload": {"req": r["id"], "stdout": "2\n", "stderr": ""}}, headers=H("t1"))
+    assert c.get(f"/repl/{r['id']}").json()["stdout"] == "2\n"

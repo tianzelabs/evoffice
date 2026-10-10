@@ -133,6 +133,30 @@ def task(office: Office, trader: str, text: str, wait_s: int = 600) -> str:
             "(it also appears in your next briefing)")
 
 
+def repl(office: Office, code: str, wait_s: int = 300) -> str:
+    """Run code in the office's shared REPL and return what it printed."""
+    import time as _t
+    if DRY:
+        return _dry({"repl": code[:500]})
+    r = _safe(lambda: office.repl(code))
+    if "error" in r:
+        return r["error"]
+    deadline = _t.time() + wait_s
+    while _t.time() < deadline:
+        _t.sleep(2)
+        s = _safe(lambda: office.repl_status(r["id"]))
+        if s.get("status") == "done":
+            out = s.get("stdout") or ""
+            err = s.get("stderr") or ""
+            return out + (("\n[stderr]\n" + err) if err.strip() else "") + f"\n[{s.get('secs')}s]"
+    return (f"still running after {wait_s}s (the trader may be mid-task; the REPL runs one thing at a time). "
+            f"Check with `office repl-result {r['id']}`.")
+
+
+def repl_result(office: Office, req_id: int) -> str:
+    return json.dumps(_safe(lambda: office.repl_status(req_id)), ensure_ascii=False)
+
+
 def task_result(office: Office, task_id: int) -> str:
     return json.dumps(_safe(lambda: office.task_status(task_id)), ensure_ascii=False)
 

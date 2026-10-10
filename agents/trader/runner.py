@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import io
+import signal
 import shutil
 import types
 
@@ -64,6 +65,11 @@ MIN_BUDGET_USD = 0.005
 # result goes back as a `task_result`. should_wake no longer wakes the trader: it raises a `trigger`
 # that wakes the MANAGER. Only the boss still talks to the trader directly. "self" is the old mode.
 MODE = os.environ.get("TRADER_MODE", "tool")
+# The office has ONE shared REPL (user, 2026-10-10): this process hosts it. The manager's code
+# (`repl` events) runs in the same namespace the trader works in, between the trader's turns.
+REPL_HOST = os.environ.get("SHARED_REPL_HOST", "1") == "1"
+REPL_TIMEOUT_S = 120
+REPL_OUT_CHARS = 20_000
 TRIGGER_GAP_S = 30 * 60
 
 
@@ -86,6 +92,8 @@ class Runner:
         fresh = "last_seen" not in st
         self.last_seen = st.get("last_seen") or self._latest_event_id()   # a new hire starts from now
         self.last_turn = st.get("last_turn", 0.0)     # persisted: a restart is not a reason to wake
+        # never replay old repl requests after a restart: start from now if there is no cursor
+        self.repl_seen = st.get("repl_seen") or self.last_seen
         self.asleep_said = False
         self.bars: list[dict] = []
         self.chat_recent: list[dict] = []
@@ -276,7 +284,8 @@ class Runner:
         prev = self.ns.get("past_turns_before_restart") or []
         (STATE / "history.dill").write_bytes(dill.dumps(list(prev) + hist[-50:]))
         (STATE / "runner.json").write_text(json.dumps({"turn_n": self.turn_n, "version": self.version,
-                                                       "last_seen": self.last_seen, "last_turn": self.last_turn}))
+                                                       "last_seen": self.last_seen, "last_turn": self.last_turn,
+                                                       "repl_seen": self.repl_seen}))
         if lost:   # never `except: pass` -- tell the trader what a restart would erase
             self.notes.append("these objects could not be saved and would be lost on a restart: " + ", ".join(lost))
 
@@ -493,12 +502,63 @@ class Runner:
         self.snapshot()
         log(f"turn {self.turn_n} done in {time.perf_counter() - t0:.0f}s cost {cost} version {self.version}: {summary[:120]!r}")
 
+    # ---------- the shared REPL ----------
+    def serve_repl(self):
+        """Run the manager's (or boss's) code in this REPL. One request at a time, never during a turn."""
+        if not REPL_HOST:
+            return
+        evs = self.office.events(self.repl_seen)
+        if not evs:
+            return
+        reqs = [e for e in evs if e["kind"] == "repl"]
+        self.repl_seen = evs[-1]["id"]                    # always advance: never re-read the backlog
+        for e in reqs:
+            try:
+                self.write_facts("")                        # the data they see is as fresh as the trader's
+            except Exception as ex:
+                log("repl: facts refresh failed:", ex)
+            env = self.rlm._persistent_env
+            t0 = time.perf_counter()
+
+            def _timeout(*_):
+                raise TimeoutError(f"stopped after {REPL_TIMEOUT_S}s")
+            old = signal.signal(signal.SIGALRM, _timeout)
+            signal.alarm(REPL_TIMEOUT_S)
+            try:
+                r = env.execute_code(e["payload"]["code"])
+                out, err = r.stdout, r.stderr
+            except TimeoutError as ex:                      # raised outside execute_code's own try
+                out, err = "", str(ex)
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old)
+            secs = round(time.perf_counter() - t0, 2)
+            self.office.report("repl_result", {"req": e["id"], "by": e["actor"], "secs": secs,
+                                               "stdout": out[-REPL_OUT_CHARS:], "stderr": err[-4000:]})
+            own = mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs))
+            v, names = strategy_version(self.ns, own)
+            if v != self.version:
+                self.office.report("version", {"version": v, "previous": self.version, "objects": names,
+                                               "by": e["actor"]})
+                self.version = v
+            self.snapshot()
+            log(f"repl #{e['id']} from {e['actor']} in {secs}s")
+
     def run(self, max_turns: int | None = None):
         self.warmup()
         self.office.report("agent_state", {"state": "idle"})
         log(f"{self.me} up, model {MODEL}, heartbeat {HEARTBEAT_S}s, version {self.version}")
+        next_minute = 0.0
         while max_turns is None or self.turn_n < max_turns:
-            time.sleep(60 - time.time() % 60 + 3)            # just after each minute closes
+            time.sleep(2)
+            try:
+                self.serve_repl()
+            except Exception as e:
+                log("repl error:", type(e).__name__, str(e)[:300])
+                traceback.print_exc()
+            if time.time() < next_minute:
+                continue
+            next_minute = time.time() - time.time() % 60 + 63   # just after each minute closes
             try:
                 self.check_employment()
                 note = self.refresh()

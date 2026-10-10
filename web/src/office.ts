@@ -504,6 +504,7 @@ export class OfficeScene extends Phaser.Scene {
       case "task_result":
         this.float(this.over(a), p.error ? "✗ task failed" : "✓ task done", p.error ? "#c62828" : "#1b7a3d");
         break;
+      case "repl": this.float(this.over(a), `⌨ shared REPL · ${p.lines} lines`, "#5a5a6e"); break;
       case "trigger": this.float(this.over(a), "⚡ trigger → manager", "#b8860b", "alert"); break;
       case "backtest":
         this.float(this.over(a), `🔬 ${p.error ? "bug" : (p.net_bps_per_trade ?? "–") + " bps"}`, "#5a5a6e");

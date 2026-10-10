@@ -74,6 +74,12 @@ class Office:
         # finished, recorded the result and spent one of the day's tries (found live)
         return self.post("/evaluate", {"code": code, "version": version}, timeout=300)
 
+    def repl(self, code: str) -> dict:
+        return self.post("/repl", {"code": code})
+
+    def repl_status(self, req_id: int) -> dict:
+        return self.get(f"/repl/{req_id}")
+
     def task(self, to: str, text: str) -> dict:
         return self.post("/tasks", {"to": to, "text": text})
 

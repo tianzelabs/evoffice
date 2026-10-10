@@ -39,7 +39,7 @@ class Say(BaseModel):
     to: str | None = None
 
 
-REPORTABLE = {"wake", "version", "agent_state", "turn", "task_result", "trigger"}   # what an agent may say about itself
+REPORTABLE = {"wake", "version", "agent_state", "turn", "task_result", "trigger", "repl_result"}   # what an agent may say about itself
 
 
 class Report(BaseModel):
@@ -57,6 +57,10 @@ class Params(BaseModel):
 class Fire(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
     replace: bool = True
+
+
+class Repl(BaseModel):
+    code: str = Field(min_length=1, max_length=20_000)
 
 
 class Task(BaseModel):
@@ -318,6 +322,24 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         if not emp or emp["role"] != "trader" or emp["fired_ts"]:
             raise HTTPException(409, f"no working trader {body.to!r}")
         return store.emit(w["id"], "task", {"to": body.to, "text": body.text})
+
+    @app.post("/repl")
+    def run_in_shared_repl(body: Repl, w: dict = Depends(who)):
+        """Run code in the office's ONE shared REPL (user, 2026-10-10: everyone works in the same REPL).
+        It lives in the trader's process; the runner executes it between turns and reports `repl_result`."""
+        if w["role"] not in ("manager", "boss"):
+            raise HTTPException(403, "the trader already works in the shared REPL; this route is for the manager and boss")
+        if not store.q("SELECT id FROM employees WHERE role = 'trader' AND fired_ts IS NULL"):
+            raise HTTPException(409, "no working trader hosts the shared REPL")
+        return store.emit(w["id"], "repl", {"code": body.code, "lines": body.code.count("\n") + 1})
+
+    @app.get("/repl/{req_id}")
+    def repl_status(req_id: int):
+        rows = store.q("SELECT ts, payload FROM events WHERE kind = 'repl_result' "
+                       "AND json_extract(payload, '$.req') = ? ORDER BY id DESC LIMIT 1", (req_id,))
+        if not rows:
+            return {"req": req_id, "status": "pending"}
+        return {"req": req_id, "status": "done", "ts": rows[0]["ts"], **json.loads(rows[0]["payload"])}
 
     @app.get("/tasks/{task_id}")
     def task_status(task_id: int):
