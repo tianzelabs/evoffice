@@ -82,7 +82,11 @@ What to use it for:
 - THE EXAM: only the trader can submit evaluate(code) (60 held-out days, 5 tries a day,
   broken code refused without spending a try). Send the best candidate when it has
   survived backtests on both 'train' and 'recent'.
-- TRADING: tell it exactly what to open, close or place. Small live paper trades are
+- TRADING: tell it exactly what to open, close or place. For a maker entry use
+  place_order(..., price="best"): it joins the bid (buy) or ask (sell) as the book is when
+  the order arrives. A price read earlier goes stale -- two of your first three entries
+  were rejected that way. A resting order fills only when the market trades THROUGH it,
+  so an order at the best price with a 15-minute TTL often expires unfilled. Small live paper trades are
   cheap experiments with virtual money and the only data nobody has seen -- use them.
 - TRIGGERS: have it define should_wake(bars). The office runs it every minute without a
   model; when it fires, YOU are woken (a `trigger` event, at most every 30 min) and decide

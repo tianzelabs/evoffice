@@ -48,12 +48,21 @@ def get(store: Store, order_id: int) -> dict:
     return rows[0]
 
 
-def place(store: Store, market, who: dict, intent: str, size: float | None, price: float, side: str | None = None,
+JOIN = ("best", "bid", "ask")      # price resolved from the book at the moment of placing
+
+
+def place(store: Store, market, who: dict, intent: str, size: float | None, price: float | str, side: str | None = None,
           position_id: int | None = None, post_only: bool = True, ttl_min: int | None = None,
           strategy_version: str | None = None) -> dict:
     if who["role"] != "trader":
         raise OrderRefused("only traders place orders")
-    if abs(price / TICK - round(price / TICK)) > 1e-9 or price <= 0:
+    # Found live: an agent priced a post-only buy from a quote read ~30 s before placing; the book had
+    # moved, the order would have crossed, and it was rejected twice. "best" joins our side of the book
+    # (bid for a buy, ask for a sell) as it is NOW.
+    join = price if isinstance(price, str) else None
+    if join is not None and join not in JOIN:
+        raise OrderRefused(f"price must be a number or one of {JOIN}")
+    if join is None and (abs(price / TICK - round(price / TICK)) > 1e-9 or price <= 0):
         raise OrderRefused(f"price must be a positive multiple of the tick ({TICK} USD)")
     ttl = int(ttl_min or DEFAULT_TTL_MIN)
     if not 1 <= ttl <= MAX_TTL_MIN:
@@ -83,6 +92,8 @@ def place(store: Store, market, who: dict, intent: str, size: float | None, pric
         q = market.quote(PRODUCT)
     except Stale as e:
         raise OrderRefused(f"no fresh book, not placing: {e}") from e
+    if join is not None:
+        price = {"bid": q.bid, "ask": q.ask, "best": q.bid if book_side == "buy" else q.ask}[join]
     crosses = price >= q.ask if book_side == "buy" else price <= q.bid
     t = time.time()
     oid = store.x("INSERT INTO orders (employee_id, intent, position_id, pair, side, position_side, size, price, "

@@ -108,7 +108,7 @@ class Runner:
         tools = {
             "open_position": {"tool": self._open, "description": "open_position(side, size, max_hold_s=None): a MARKET order -- buys at the ask / sells at the bid, pays the taker fee (0.05%). side 'long'|'short', size in BTC. Returns the position or {'error': why}"},
             "close_position": {"tool": self._close, "description": "close_position(position_id): a MARKET close (taker). Returns the closed position with net pnl, or {'error': why}"},
-            "place_order": {"tool": self._place, "description": "place_order(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60): a LIMIT order. intent 'open' (with side, size) or 'close' (with position_id). Rests in the book and pays the MAKER fee (0.02%) when the market trades through its price; post_only rejects it if it would fill at once. Price must be a whole USD."},
+            "place_order": {"tool": self._place, "description": "place_order(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60): a LIMIT order. intent 'open' (with side, size) or 'close' (with position_id). Rests in the book and pays the MAKER fee (0.02%) when the market trades through its price; post_only rejects it if it would fill at once. Price is a whole USD, or 'best' to join your side of the book as it is when the order arrives (bid for a buy, ask for a sell) -- use 'best' rather than a price read earlier, which may have moved."},
             "cancel_order": {"tool": self._cancel, "description": "cancel_order(order_id)"},
             "say": {"tool": self._say, "description": "say(text, to=None): speak in the office chat; everyone sees it"},
             "jev": {"tool": self._jev, "description": "jev(state, questions): Jev typed judgement; questions = {id: {'type': 'noul'|'choice'|'score', 'instructions': str, 'criteria': ...}}"},
@@ -128,7 +128,7 @@ class Runner:
                        backend_kwargs={"model_name": MODEL, "base_url": self.office.url + "/llm/v1",
                                        "api_key": self.office.token},
                        environment="local", persistent=True, custom_tools=tools,
-                       max_iterations=12, max_budget=0.04, max_timeout=300, user_prologue=prologue,
+                       max_iterations=12, max_budget=0.12, max_timeout=300,   # per task; the day is capped at $0.50 user_prologue=prologue,
                        # the office caps output at 8192 too; this is the tighter, per-call one
                        sampling_args={"max_tokens": 4096}, sub_sampling_args={"max_tokens": 4096},
                        # every turn's full trajectory, for debugging now and for the manager's review later
@@ -533,8 +533,12 @@ class Runner:
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, old)
             secs = round(time.perf_counter() - t0, 2)
-            self.office.report("repl_result", {"req": e["id"], "by": e["actor"], "secs": secs,
-                                               "stdout": out[-REPL_OUT_CHARS:], "stderr": err[-4000:]})
+            res = {"req": e["id"], "by": e["actor"], "secs": secs, "stdout": out[-REPL_OUT_CHARS:], "stderr": err[-3000:]}
+            try:
+                self.office.report("repl_result", res)
+            except Refused as ex:                       # never lose a result: the code has already run
+                self.office.report("repl_result", {**res, "stdout": out[-2000:],
+                                                   "stderr": f"(output cut: {ex}) " + err[-1000:]})
             own = mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs))
             v, names = strategy_version(self.ns, own)
             if v != self.version:

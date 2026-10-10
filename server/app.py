@@ -85,7 +85,7 @@ class Backtest(BaseModel):
 
 class Order(BaseModel):
     intent: str                       # "open" | "close"
-    price: float
+    price: float | str                # a number, or "best" | "bid" | "ask": the book at the moment of placing
     size: float | None = None         # for intent = open
     side: str | None = None           # "long" | "short", for intent = open
     position_id: int | None = None    # for intent = close
@@ -268,8 +268,11 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         """An agent reporting on itself (woke, new strategy version, what it is doing). Never about others."""
         if body.kind not in REPORTABLE:
             raise HTTPException(422, f"kind must be one of {sorted(REPORTABLE)}")
-        if len(json.dumps(body.payload)) > 4000:
-            raise HTTPException(413, "payload too large")
+        # repl/task results carry real output (found live: REPL output > 4000 chars was refused, so the
+        # code ran but the manager never saw what it printed)
+        cap = 25_000 if body.kind in ("repl_result", "task_result") else 4000
+        if len(json.dumps(body.payload)) > cap:
+            raise HTTPException(413, f"payload too large (max {cap} characters)")
         ev = store.emit(w["id"], body.kind, body.payload)
         if body.kind == "version":
             progress.announce(store, w["id"])

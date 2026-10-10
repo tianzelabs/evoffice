@@ -107,3 +107,10 @@ def test_funding_is_charged_hourly_once(office):
     assert len(funding.apply(store, m, t)) == 1
     assert funding.apply(store, m, t) == []                     # once per hour
     assert store.q("SELECT funding FROM positions")[0]["funding"] == pytest.approx(-0.0001 * 0.005 * 80_000)
+
+
+def test_best_joins_the_book_as_it_is_when_the_order_arrives(office):
+    c, *_ = office
+    o = place(c, intent="open", side="long", size=0.005, price="best").json()
+    assert o["status"] == "open" and o["price"] == 79_999.5          # the bid at that moment: rests, never crosses
+    assert place(c, intent="open", side="long", size=0.005, price="mid").status_code == 409
