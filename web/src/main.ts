@@ -1,3 +1,4 @@
+const history_ = window.history;
 // Boot: replay the office's history into the room without animation, then go live.
 import * as Phaser from "phaser";
 import { allEvents, getJSON, stream, type OfficeEvent } from "./net";
@@ -47,7 +48,10 @@ async function market() {
   const params = new URLSearchParams(location.search);
   const day = params.get("replay");
   wireReplayControls(day);
-  if (day) { replay(history, day, Number(params.get("speed") ?? 60)); board(); market(); season(); careers(); return; }
+  if (day) {
+    history_.replaceState(null, "", location.pathname);    // a replay is one-shot: refreshing goes back to live
+    replay(history, day, Number(params.get("speed") ?? 60)); board(); market(); season(); careers(); return;
+  }
   for (const e of history) { scene.apply(e, false); addToLog(e); }
   const last = history.length ? history[history.length - 1].id : 0;
   stream(last, (e) => {
