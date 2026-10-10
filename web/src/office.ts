@@ -143,6 +143,9 @@ class Actor {
 export class OfficeScene extends Phaser.Scene {
   actors: Record<string, Actor | undefined> = {};      // keyed by seat: "trader-1", "trader-2", "manager", "boss"
   seatOf: Record<string, string> = {};     // employee id -> seat
+  // who sits there NOW. Found live: the fired trader-1's progress kept writing "KESTREL" onto the
+  // plate its successor had taken -- only the current occupant may touch a seat's plate, bars, cups.
+  occupant: Record<string, string> = {};
   plates: Record<string, Phaser.GameObjects.Text> = {};
   bars: Record<string, Phaser.GameObjects.Graphics> = {};      // per plate: XP (gold) and budget left (green)
   levels: Record<string, string> = {};                        // employee id -> "Lv2"
@@ -327,6 +330,7 @@ export class OfficeScene extends Phaser.Scene {
     const place = this.placeOf(seat);
     if (!place) return undefined;
     const role = seat === "manager" ? "manager" : "trader";
+    this.occupant[seat] ??= employee;
     const a = new Actor(this, role, this.nameOf(employee), place, PEOPLE_FRAME[seat] ?? 0, place.seat);
     this.plates[place.plate]?.setText(this.nameOf(employee).toUpperCase());
     return (this.actors[seat] = a);
@@ -341,6 +345,7 @@ export class OfficeScene extends Phaser.Scene {
   setProgress(progress: Record<string, any>, budgets: any[]) {
     for (const [id, p] of Object.entries(progress)) {
       this.levels[id] = `Lv${p.level}${p.probation ? " (probation)" : ""}`;
+      if (this.occupant[this.seat(id)] !== id) continue;
       const a = this.actors[this.seat(id)];
       if (!a?.place) continue;
       this.plates[a.place.plate]?.setText(this.plateText(id));
@@ -360,6 +365,7 @@ export class OfficeScene extends Phaser.Scene {
   /** trophies won so far, on each winner's desk */
   setTrophies(trophies: Record<string, any[]>) {
     for (const [id, list] of Object.entries(trophies)) {
+      if (this.occupant[this.seat(id)] !== id) continue;
       const a = this.actors[this.seat(id)];
       if (!a?.place) continue;
       const key = a.place.plate, { x, y } = a.place.desk;
@@ -436,10 +442,26 @@ export class OfficeScene extends Phaser.Scene {
       return;
     }
     if (e.kind === "fire") {
-      this.seatOf[p.successor] = this.seat(p.employee);
+      const seat = this.seat(p.employee);
       const a = this.actor(p.employee);
       if (!a) return;
       const plate = a.place?.plate;
+      if (!p.successor) {                       // the boss closed the seat: the desk is left empty
+        this.occupant[seat] = "";
+        const clear = () => {
+          if (plate) { this.plates[plate]?.setText(""); this.bars[plate]?.clear(); this.cups[plate]?.destroy(); }
+          delete this.actors[seat];
+        };
+        if (!live) { a.sprite.setAlpha(0); a.shadow.setAlpha(0); a.sync(); clear(); return; }
+        a.then(async () => {
+          this.float(this.over(a), "LEFT THE OFFICE", "#5a5a6e");
+          await a.walkTo(DOOR); await a.fade(0); clear();
+        });
+        return;
+      }
+      this.seatOf[p.successor] = seat;
+      this.occupant[seat] = p.successor;
+      if (plate) this.cups[plate]?.destroy();
       if (!live) { a.rename(this.nameOf(p.successor)); if (plate) this.plates[plate]?.setText(this.nameOf(p.successor).toUpperCase()); return; }
       a.then(async () => {
         this.float(this.over(a), "FIRED", "#c62828");
