@@ -91,14 +91,15 @@ class Runner:
             "jev": {"tool": self._jev, "description": "jev(state, questions): Jev typed judgement; questions = {id: {'type': 'noul'|'choice'|'score', 'instructions': str, 'criteria': ...}}"},
             "fetch_bars": {"tool": self._fetch_bars, "description": "fetch_bars(minutes): up to 7 days of 1-minute PF_XBTUSD (Kraken BTC perpetual) bars, oldest first"},
             "set_name": {"tool": self._set_name, "description": "set_name(name): choose your own name (shown everywhere instead of your id)"},
-            "evaluate": {"tool": self._evaluate, "description": "evaluate(code): score a strategy on 60 days you cannot see, under the live fee rules. code must define decide(bars) -> {'side': 'long'|'short'|None, 'hold_minutes': int, optional 'entry': 'limit', 'offset_bps': float, 'ttl_minutes': int}; called every 15 min with the previous 1440 bars. 5 tries a day; aggregates only"},
+            "backtest": {"tool": self._backtest, "description": "backtest(code, data='train', days=30): run the SAME simulator as evaluate on data you may see -- 'train' (up to 60 days before the held-out window) or 'recent' (up to 6 of the last 7 days). Returns totals, by_side, by_entry and trade_list (every trade). ~200 a day, no XP: your research tool"},
+            "evaluate": {"tool": self._evaluate, "description": "evaluate(code): score a strategy on 60 days you cannot see, under the live fee rules. code must define decide(bars) -> {'side': 'long'|'short'|None, 'hold_minutes': int (longest hold), optional 'entry': 'limit', 'offset_bps': float, 'ttl_minutes': int, 'take_profit_bps': float (resting limit exit, maker), 'stop_loss_bps': float (market exit, taker)}; called every 15 min with the previous 1440 bars. 5 tries a day; aggregates only"},
         }
         self.tool_sigs = {"open_position": "(side, size, max_hold_s=None) [market, taker]",
                           "close_position": "(position_id) [market, taker]",
                           "place_order": "(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60) [limit, maker]",
                           "cancel_order": "(order_id)",
                           "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)",
-                          "evaluate": "(code)", "set_name": "(name)"}
+                          "evaluate": "(code)", "backtest": "(code, data='train', days=30)", "set_name": "(name)"}
         prologue = (HERE / "prompt.md").read_text() + "\n\n" + (HERE / "mechanics.md").read_text()
         self.rlm = RLM(backend="openai",
                        backend_kwargs={"model_name": MODEL, "base_url": self.office.url + "/llm/v1",
@@ -175,6 +176,12 @@ class Runner:
         try:
             v, _ = strategy_version(self.ns, mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs)))
             return self.office.evaluate(str(code), v)
+        except Refused as e:
+            return {"error": str(e)}
+
+    def _backtest(self, code, data="train", days=30):
+        try:
+            return self.office.backtest(str(code), str(data), float(days))
         except Refused as e:
             return {"error": str(e)}
 
@@ -319,6 +326,8 @@ class Runner:
         self.my_name = next((e.get("name") for e in staff if e["id"] == self.me), None)
         evals = [{"ts": e["ts"][:19], **e["payload"]} for e in self._my_events("evaluation")][-5:]
         facts = {
+            "me": ({"id": self.me, "name": self.my_name, "model": MODEL},
+                   "who YOU are: your own id and name. Other names in the chat are your colleagues, not you", ""),
             "bars_1m": (list(self.bars), "PF_XBTUSD (Kraken BTC perpetual) closed 1-minute bars, oldest first; keys m (UTC minute), o, h, l, c, v", bar_note),
             "price_now": (px, "PF_XBTUSD quote: last, bid, ask, mark, funding_per_hour (longs pay it when > 0), fees", ""),
             "my_orders": (self.office.orders(self.me, open_only=True), "your resting limit orders", ""),

@@ -18,7 +18,7 @@ def office(tmp_path, monkeypatch):
                     {"trades": 50, "net_bps_per_trade": -4.0, "ci95_net_bps_per_trade": [-9.0, 1.0]},
                     {"trades": 50, "net_bps_per_trade": 6.0, "ci95_net_bps_per_trade": [1.0, 11.0]}])
     store = Store(str(tmp_path / "o.db"))
-    c = TestClient(create_app(store, FakeMarket(), TOKENS, backstop_every_s=0, eval_runner=lambda b, code: dict(next(results))))
+    c = TestClient(create_app(store, FakeMarket(), TOKENS, backstop_every_s=0, eval_runner=lambda b, code, detail=False: {"trades": 0} if "precheck" in str(b) else dict(next(results))))
     return c, store
 
 

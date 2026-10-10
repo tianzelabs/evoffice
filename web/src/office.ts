@@ -478,6 +478,9 @@ export class OfficeScene extends Phaser.Scene {
       case "evaluation":
         this.float(this.over(a), `held-out: ${p.net_bps_per_trade ?? "–"} bps/trade`, (p.net_bps_per_trade ?? -1) > 0 ? "#1b7a3d" : "#c62828");
         break;
+      case "backtest":
+        this.float(this.over(a), `🔬 ${p.error ? "bug" : (p.net_bps_per_trade ?? "–") + " bps"}`, "#5a5a6e");
+        break;
       case "open": this.float({ x: a.home.x, y: a.home.y - 90 }, `OPEN ${p.side} ${p.size}${p.liquidity === "maker" ? " (maker)" : ""}`, "#1d1d1f"); break;
       case "order":
         if (p.status === "placed") this.float({ x: a.home.x, y: a.home.y - 90 }, `LIMIT ${String(p.side).toUpperCase()} @ ${p.price}`, "#1a5fb4");

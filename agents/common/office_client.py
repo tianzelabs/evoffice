@@ -74,6 +74,9 @@ class Office:
         # finished, recorded the result and spent one of the day's tries (found live)
         return self.post("/evaluate", {"code": code, "version": version}, timeout=300)
 
+    def backtest(self, code: str, data: str = "train", days: float = 30) -> dict:
+        return self.post("/backtest", {"code": code, "data": data, "days": days}, timeout=300)
+
     def jev(self, state, questions: dict) -> dict:
         r = self.post("/llm/api/alpha/decisions", {"model": "typesafe/jev-1.13", "state": state, "questions": questions})
         return r.get("answers", r)

@@ -44,7 +44,7 @@ WEEKLY_CEILING = float(os.environ.get("MANAGER_WEEKLY_CEILING", "0.6"))
 FAST_S, NORMAL_S, SLOW_S, CRAWL_S = 15 * 60, 60 * 60, 2 * 3600, 4 * 3600
 FIVE_HOUR_PAUSE = 85.0
 WEEKLY_FLOOR = 0.10                    # always allow the account's week to reach 10%
-QUIET = {"agent_state", "spend"}
+QUIET = {"agent_state", "spend", "backtest"}     # backtests are counted in the briefing, not listed
 # what wakes the manager besides the boss and messages to it; only when tokens are free
 TRADER_NEWS = {"evaluation", "close", "version", "fire", "say", "meeting", "alert", "level"} if BACKEND == "codex" else {"meeting"}
 
@@ -59,18 +59,29 @@ How the boss wants you to spend your time (it is cheap now -- use it):
    direction tests done properly (walk-forward, costs in). python3 with numpy, pandas
    and scikit-learn is installed. Save scripts and results; record what you learned in
    your notes so the next wake builds on it.
-3. TALK STRATEGY WITH THE TRADERS. Bring them what your models show -- hypotheses worth
-   testing, a horizon or exit rule they have not tried, a regime that matters -- and
-   discuss theirs. Be a colleague with ideas and data, not a referee asking for
-   timestamps. Disagree with numbers when they are wrong.
-4. KEEP THEM TRADING SMALL. A frozen hypothesis tested with a few small live paper
-   trades (0.005 BTC) produces evidence nothing else can: the future is data nobody has
-   seen. Encourage that over endless argument on visible data.
-5. THE DAILY STAND-UP (a `meeting` event): you chair it at the meeting table. Open it
+3. FEED THE TRADERS IDEAS. You are the office's idea engine, not its auditor. Write
+   candidate strategies as decide(bars) files and run them with `office backtest FILE`
+   (the office's own simulator, same fees and fills as the held-out exam, on data you
+   may see). Bring traders the ones worth their time -- with the backtest numbers --
+   e.g. maker entries (4 bps round trip instead of 10), exits other than a fixed hold,
+   funding, time of day, volatility regimes. Discuss theirs. Disagree with numbers.
+   The boss judges you by how many ideas the office tests per day and whether any of
+   them start to pay -- not by how carefully one idea was audited.
+4. DO NOT AUDIT PROCESS. Found live (2026-10-10): you spent a day asking traders for
+   control tests, timestamp reconciliations, wrapper proofs and duplicate-suppression
+   demonstrations, and the office traded once. Do not ask for any of that. Broken code
+   is the office's job now: evaluate() refuses it without spending a try, and
+   backtest() shows the error. If a trader's numbers look wrong, rerun them yourself
+   with `office backtest` and say what you found, in one message.
+5. KEEP THEM TRADING. Live paper trades at small size are cheap experiments with
+   virtual money and the only data nobody has seen. A trader with a reason to trade
+   should trade -- no prior proof, no permission needed. Push quiet traders to trade
+   and to test more, not less.
+6. THE DAILY STAND-UP (a `meeting` event): you chair it at the meeting table. Open it
    with the market picture from your models (say it to everyone); when the traders have
    reported, close with a 3-5 line summary addressed to the boss: what the market is
    doing, what your models say, what each trader changed and what the evidence shows.
-6. MARKET ALERTS (an `alert` event): look at the move with your models and tell the
+7. MARKET ALERTS (an `alert` event): look at the move with your models and tell the
    traders, in one message to everyone, what it means and what is worth watching.
 
 Each message to a trader wakes it and spends its own budget ($0.30/day). Put
@@ -94,7 +105,12 @@ def log(*a):
 
 
 def briefing(office: Office, since: int, notes: str) -> str:
-    evs = [e for e in ops.all_events(office, since) if e["kind"] not in QUIET]
+    every = ops.all_events(office, since)
+    evs = [e for e in every if e["kind"] not in QUIET]
+    tests: dict[str, int] = {}
+    for e in every:
+        if e["kind"] == "backtest":
+            tests[e["actor"]] = tests.get(e["actor"], 0) + 1
     lines = []
     for e in evs[-120:]:
         p, t = e["payload"], e["ts"][11:19]
@@ -109,7 +125,8 @@ def briefing(office: Office, since: int, notes: str) -> str:
     return "\n".join([
         f"Office time: {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC",
         "", "WHAT HAPPENED SINCE YOUR LAST WAKE (oldest first):", *(lines or ["(nothing)"]),
-        "", "LEADERBOARD: " + ops.leaderboard(office)[:3000],
+        "", "RESEARCH BACKTESTS SINCE YOUR LAST WAKE: " + (json.dumps(tests) if tests else "none"),
+        "LEADERBOARD: " + ops.leaderboard(office)[:3000],
         "CAREERS (XP from validated improvement): " + ops.progress(office)[:2000],
         "BUDGETS TODAY: " + json.dumps(office.get("/budget")),
         "", "YOUR NOTES FROM LAST TIME: " + (notes or "(none)"),

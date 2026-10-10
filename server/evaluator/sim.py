@@ -9,7 +9,12 @@ boundary the position spans.
 
 The trader's `decide(bars)` sees only the WINDOW bars before now and returns
   {"side": "long"|"short"|None, "hold_minutes": int,
-   optional "entry": "limit", "offset_bps": float, "ttl_minutes": int}
+   optional "entry": "limit", "offset_bps": float, "ttl_minutes": int,
+   optional "take_profit_bps": float, "stop_loss_bps": float}
+`hold_minutes` is the longest hold. A take-profit rests as a limit order from the
+entry bar on and exits as MAKER at its price when a bar trades through it; a stop
+exits as TAKER at its price less the half-spread, or at the bar's open if the bar
+gapped past it. When one bar reaches both, the stop is assumed to come first.
 Positions do not overlap. Only aggregates leave the evaluator: per-trade detail
 would let a trader probe the held-out window until it had reconstructed it.
 """
@@ -41,7 +46,7 @@ def _funding(side: str, entry_px: float, t0: int, t1: int, rates: dict[int, floa
 def simulate(bars: list[dict], decide, funding: dict[int, float] | None = None, step: int = STEP,
              window: int = WINDOW) -> dict:
     funding = funding or {}
-    pnl_bps, errors, makers, unfilled, i = [], 0, 0, 0, window
+    pnl_bps, trades, errors, makers, unfilled, i = [], [], 0, 0, 0, window
     first_error = None
     while i < len(bars):
         try:
@@ -49,6 +54,9 @@ def simulate(bars: list[dict], decide, funding: dict[int, float] | None = None, 
             side, hold = d.get("side"), int(d.get("hold_minutes", 0))
             limit = d.get("entry") == "limit"
             offset, ttl = float(d.get("offset_bps", 0)), max(1, min(int(d.get("ttl_minutes", 60)), MAX_TTL))
+            tp, sl = d.get("take_profit_bps"), d.get("stop_loss_bps")
+            tp = float(tp) if tp is not None and float(tp) > 0 else None
+            sl = float(sl) if sl is not None and float(sl) > 0 else None
         except Exception as e:                    # a crash is a decision not to trade, and is counted
             errors += 1
             first_error = first_error or f"{type(e).__name__}: {str(e)[:200]}"
@@ -74,10 +82,26 @@ def simulate(bars: list[dict], decide, funding: dict[int, float] | None = None, 
         if end >= len(bars):
             break
         exit_ = bars[end]["c"] - HALF_SPREAD if side == "long" else bars[end]["c"] + HALF_SPREAD
+        exit_liq, how = "taker", "time"
+        if tp or sl:
+            sgn = 1 if side == "long" else -1
+            tp_px = round(entry * (1 + sgn * tp / 1e4)) if tp else None
+            sl_px = entry * (1 - sgn * sl / 1e4) if sl else None
+            for k in range(start + 1, end + 1):
+                b = bars[k]
+                if sl_px is not None and (b["l"] <= sl_px if side == "long" else b["h"] >= sl_px):
+                    worst = min(sl_px, b["o"]) if side == "long" else max(sl_px, b["o"])
+                    exit_, exit_liq, how, end = worst - sgn * HALF_SPREAD, "taker", "stop", k
+                    break
+                if tp_px is not None and (b["h"] > tp_px if side == "long" else b["l"] < tp_px):
+                    exit_, exit_liq, how, end = float(tp_px), "maker", "take_profit", k
+                    break
         fund = _funding(side, entry, _epoch(bars[start]["m"]), _epoch(bars[end]["m"]), funding)
-        pnl_bps.append(settle(side, 1.0, entry, exit_, entry_liq, "taker", fund).pnl_bps)
+        pnl_bps.append(settle(side, 1.0, entry, exit_, entry_liq, exit_liq, fund).pnl_bps)
+        trades.append({"m": bars[start]["m"], "side": side, "entry": entry_liq, "exit": how, "hold": end - start,
+                       "pnl_bps": round(pnl_bps[-1], 2)})
         i = end + 1
-    return {"pnl_bps": pnl_bps, "decide_errors": errors, "first_error": first_error,
+    return {"pnl_bps": pnl_bps, "trades": trades, "decide_errors": errors, "first_error": first_error,
             "maker_entries": makers, "unfilled_limit_entries": unfilled}
 
 

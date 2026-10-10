@@ -67,6 +67,12 @@ class Evaluate(BaseModel):
     version: str | None = None
 
 
+class Backtest(BaseModel):
+    code: str
+    data: str = "train"
+    days: float = 30
+
+
 class Order(BaseModel):
     intent: str                       # "open" | "close"
     price: float
@@ -287,6 +293,15 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         """Score a strategy (code defining decide(bars)) on the held-out window. Aggregates only."""
         try:
             return await run_in_threadpool(evaluation.evaluate, store, market, w, body.code, eval_runner, body.version)
+        except evaluation.EvalRefused as e:
+            raise HTTPException(409, str(e))
+
+    @app.post("/backtest")
+    async def backtest(body: Backtest, w: dict = Depends(who)):
+        """Same simulator as /evaluate, on data the caller may see, with every trade. The research tool."""
+        try:
+            return await run_in_threadpool(evaluation.backtest, store, market, w, body.code, body.data, body.days,
+                                           eval_runner)
         except evaluation.EvalRefused as e:
             raise HTTPException(409, str(e))
 

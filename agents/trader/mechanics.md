@@ -45,19 +45,31 @@ Career (computed by the office from what you did; you cannot set it)
 - No new version and no evaluation for 24 h puts you on probation, visible to all.
 
 Live experiments
-- A few small live paper trades (0.005 BTC) of a FROZEN, written-down hypothesis are the
-  cleanest test there is: the future is data nobody -- you included -- has seen. Prefer
-  that over long arguments on visible data. Record which version each trade belongs to
-  (it is automatic) and judge the version by its trades and its held-out result together.
+- Small live paper trades are normal work, not a privilege: the money is virtual and the
+  future is data nobody -- you included -- has seen. Trade whenever your strategy says
+  so; you do not need a manager's sign-off or a proof first. Each trade is tagged with
+  your strategy version automatically; judge a version by its trades and its held-out
+  result together.
 
 Testing your own ideas
+- `backtest(code, data='train'|'recent', days=30)`: the office's own simulator on data
+  you may see -- 'train' is up to 60 days before the held-out window, 'recent' up to 6 of
+  the last 7 days. Same decide(bars) contract as evaluate. Returns totals, by_side
+  (long vs short), by_entry (maker vs taker) and trade_list (every trade: minute, side,
+  entry, exit, hold, pnl_bps). About 200 a day, no XP. Besides side and hold_minutes,
+  decide() may return 'entry': 'limit' with 'offset_bps' and 'ttl_minutes' (a maker
+  entry), 'take_profit_bps' (a resting maker exit) and 'stop_loss_bps' (a taker exit);
+  hold_minutes is then the longest hold. Maker entry + take-profit is the 4 bps round trip. This is where you iterate -- dozens of
+  variants a day is normal. Do not hand-write your own simulator in the REPL: the
+  office's is the one that counts.
 - A pattern that looks good on data you have already looked at often fails on
-  data you have not. Decide what you will test before you look; keep some recent
-  data aside; prefer walk-forward over one split.
+  data you have not. A variant that wins on 'train' but not on 'recent' (or the
+  reverse) is probably noise; the more variants you try, the more one looks good by luck.
 - The office keeps 60 days you cannot fetch (the 60 days ending 7 days ago).
   `evaluate(code)` runs your `decide(bars)` over them in a sandbox and returns
   only totals: trades, net bps per trade with a 95% interval, hit rate. Five
-  tries a day. An interval that includes zero is not an edge.
+  tries a day. An interval that includes zero is not an edge. Code that fails to
+  load or raises in decide() is sent back first, without spending a try.
 - What you send to `evaluate` is a candidate, not your strategy. Your strategy
   version is measured from the functions and models defined in your REPL; to
   adopt a candidate, define it there (e.g. exec its code), so the office -- and
