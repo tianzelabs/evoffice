@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import broker, fees, iterations, leaderboard, names, orders, positions, progress, scheduler, seasons, staff
+from . import broker, fees, objective, iterations, leaderboard, names, orders, positions, progress, scheduler, seasons, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import PRODUCT, FuturesMarket, Stale
@@ -226,6 +226,11 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     @app.get("/leaderboard")
     def board():
         return leaderboard.standings(store)
+
+    @app.get("/objective")
+    def get_objective():
+        """The manager's objective ladder: from minus to plus, computed from the record."""
+        return objective.compute(store)
 
     @app.get("/golive/{employee_id}")
     def golive(employee_id: str):

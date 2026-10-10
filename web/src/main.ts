@@ -3,7 +3,7 @@ const history_ = window.history;
 import * as Phaser from "phaser";
 import { allEvents, getJSON, stream, type OfficeEvent } from "./net";
 import { OfficeScene, W, H } from "./office";
-import { addToLog, displayName, initPanel, learnNames, refreshBoard, refreshBudget, refreshIterations, refreshSeason, setCareers, setPrice } from "./panel";
+import { addToLog, displayName, initPanel, learnNames, refreshBoard, refreshBudget, refreshIterations, refreshObjective, refreshSeason, setCareers, setPrice } from "./panel";
 import "./style.css";
 
 const scene = new OfficeScene();
@@ -62,8 +62,10 @@ async function market() {
     if (["version", "evaluation", "close", "fire"].includes(e.kind)) refreshIterations().catch(() => {});
     if (["level", "badge", "evaluation", "close", "version", "spend", "name"].includes(e.kind)) careers();
     if (["award", "evaluation", "close", "version"].includes(e.kind)) season();
+    if (["backtest", "evaluation", "close"].includes(e.kind)) refreshObjective().catch(() => {});
   });
   board(); market(); refreshBudget(); refreshIterations().catch(() => {}); careers(); season();
+  refreshObjective().catch(() => {});
   setInterval(season, 120_000);
   setInterval(careers, 60_000);
   setInterval(market, 15_000);

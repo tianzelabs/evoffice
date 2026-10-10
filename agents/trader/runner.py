@@ -11,7 +11,7 @@ The container holds an office token and no model key: the RLM's OpenAI client
 points at the office's /llm gateway, which holds the key and the budget.
 
 Lessons from the spikes that are load-bearing here:
-- `class` is re-enabled in LocalREPL's builtins (spike 1).
+- `class` is re-enabled in LocalREPL's builtins (spike 1); so are exec/eval/compile (2026-10-10).
 - Per-turn data goes into the namespace, never through the RLM `context`, which
   rlms re-points at context_0 every turn (spike 5).
 - `answer` carries over between turns unless reset (spike 2).
@@ -44,6 +44,12 @@ from agents.trader import map as mapmod                    # noqa: E402
 from agents.trader.version import strategy_version          # noqa: E402
 
 local_repl._SAFE_BUILTINS["__build_class__"] = builtins.__build_class__
+# rlms sets exec/eval/compile/globals/locals to None. Found live: both traders tried to adopt a
+# candidate's source with exec() and got "'NoneType' object is not callable", then retyped it by
+# hand. The REPL already runs any code the trader writes, inside its own container, so the block
+# protected nothing -- it only broke the documented way to adopt a candidate.
+for _name in ("exec", "eval", "compile", "globals", "locals"):
+    local_repl._SAFE_BUILTINS[_name] = getattr(builtins, _name)
 
 HERE = Path(__file__).parent
 MODEL = os.environ.get("TRADER_MODEL", "anthropic/claude-haiku-5.5")

@@ -152,3 +152,17 @@ export async function refreshIterations() {
   }).join("") || `<div class="muted">no traders</div>`;
   return it;
 }
+
+export async function refreshObjective() {
+  const o = await getJSON("/objective");
+  const fmt = (v: any) => (v === null || v === undefined ? "–" : typeof v === "number" ? (v > 0 ? "+" : "") + v : esc(String(v)));
+  const best = (r: any) => {
+    const b = r.best;
+    if (r.rung === 1) return `train ${fmt(b.best_train_bps)} · recent ${fmt(b.best_recent_bps)} · both ${fmt(b.both_windows_min_bps)} bps (${b.candidates_tested} tested)`;
+    if (r.rung === 2) return `best ${fmt(b.best_heldout_bps)} bps (${b.evaluations} exams)`;
+    if (r.rung === 3) return `best low ${fmt(b.best_interval_low_bps)} bps`;
+    return `${b.last_trades} trades · ${fmt(b.net_usd)} USD · ${fmt(b.avg_net_bps)} bps`;
+  };
+  $("#objective").innerHTML = `<table><tbody>${o.rungs.map((r: any) =>
+    `<tr><td>${r.reached ? "✅" : r.rung === o.rung + 1 ? "▶" : "·"} ${r.rung}</td><td>${esc(r.goal)}<br><span class="muted">${best(r)}</span></td></tr>`).join("")}</tbody></table>`;
+}

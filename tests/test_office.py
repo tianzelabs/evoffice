@@ -128,3 +128,14 @@ def test_only_the_boss_closes_a_seat(tmp_path):
     r = c.post("/employees/trader-2/fire", json={"reason": "one trader for now", "replace": False}, headers=H("b"))
     assert r.status_code == 200 and r.json()["successor"] is None and "t2" not in tokens
     assert c.get("/me", headers=H("t2")).status_code == 401
+
+
+def test_the_objective_ladder_starts_at_the_bottom_and_climbs_on_the_record(office):
+    c, _, store = office
+    o = c.get("/objective").json()
+    assert o["rung"] == 0 and o["next"].startswith("a candidate")
+    for data, bps in (("train", 1.2), ("recent", 0.4)):
+        store.emit("trader-1", "backtest", {"data": data, "days": 6, "trades": 40, "net_bps_per_trade": bps,
+                                            "candidate": "abc", "error": None})
+    o = c.get("/objective").json()
+    assert o["rung"] == 1 and o["rungs"][0]["best"]["both_windows_min_bps"] == 0.4

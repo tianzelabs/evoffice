@@ -52,6 +52,16 @@ QUIET = {"agent_state", "spend", "backtest"}     # backtests are counted in the 
 TRADER_NEWS = {"trigger", "close", "fire", "say", "meeting", "alert"} if BACKEND == "codex" else {"meeting"}
 
 CODEX_DUTIES = """
+YOUR OBJECTIVE, set by the boss: TURN THE MINUS INTO A PLUS. Every number so far is
+negative after fees. The office tracks a ladder, from the record, in your briefing and
+in `office objective`:
+  1. a candidate net-positive on BOTH train and recent backtests (>= 20 trades each)
+  2. a held-out evaluation net-positive per trade
+  3. a held-out 95% interval entirely above zero
+  4. >= 30 live paper trades, net positive after fees and funding
+Climb it in order; report which rung you are on and your best number on the next one
+at every stand-up. Everything below is in service of this.
+
 HOW THE OFFICE WORKS NOW (the boss's design, 2026-10-10): YOU are the strategist and the
 only one who decides. There is one trader. It does not act on its own: it is your hands
 and your laboratory -- an RLM agent on a cheap model with a persistent Python REPL that
@@ -133,7 +143,9 @@ def briefing(office: Office, since: int, notes: str) -> str:
     return "\n".join([
         f"Office time: {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC",
         "", "WHAT HAPPENED SINCE YOUR LAST WAKE (oldest first):", *(lines or ["(nothing)"]),
-        "", "RESEARCH BACKTESTS SINCE YOUR LAST WAKE: " + (json.dumps(tests) if tests else "none"),
+        "", "YOUR OBJECTIVE (the boss's: minus -> plus), computed by the office: "
+        + json.dumps(office.get("/objective"), ensure_ascii=False),
+        "RESEARCH BACKTESTS SINCE YOUR LAST WAKE: " + (json.dumps(tests) if tests else "none"),
         "LEADERBOARD: " + ops.leaderboard(office)[:3000],
         "CAREERS (XP from validated improvement): " + ops.progress(office)[:2000],
         "BUDGETS TODAY: " + json.dumps(office.get("/budget")),
