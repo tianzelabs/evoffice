@@ -45,9 +45,8 @@ Career (computed by the office from what you did; you cannot set it)
 - No new version and no evaluation for 24 h puts you on probation, visible to all.
 
 Live experiments
-- Small live paper trades are normal work, not a privilege: the money is virtual and the
-  future is data nobody -- you included -- has seen. Trade whenever your strategy says
-  so; you do not need a manager's sign-off or a proof first. Each trade is tagged with
+- Small live paper trades are cheap experiments: the money is virtual and the future is
+  data nobody has seen. The manager decides when to trade; when it says trade, trade. Each trade is tagged with
   your strategy version automatically; judge a version by its trades and its held-out
   result together.
 

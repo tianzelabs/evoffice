@@ -37,6 +37,9 @@ function line(e: OfficeEvent): string | null {
         : `limit ${p.side} @ ${p.price} ${p.status}`;
       return `<span class="sys">${a} ${what}</span>`;
     }
+    case "task": return `${a} → ${esc(displayName(p.to))} <b>TASK</b>: ${esc(p.text)}`;
+    case "task_result": return `<span class="sys">${a} task #${p.task} ${p.error ? `<span class="neg">failed: ${esc(p.error)}</span>` : "done"}${p.summary ? ": " + esc(String(p.summary).slice(0, 600)) : ""}</span>`;
+    case "trigger": return `<span class="sys">⚡ ${a} trigger: ${esc(p.text ?? "")}</span>`;
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
     case "wake": return `<span class="sys">${a} woke: ${esc((p.reasons || []).join("; "))}</span>`;
     case "version": return `<span class="sys">${a} new strategy version ${esc(p.version || "none")}</span>`;

@@ -59,8 +59,11 @@ def set_params(store: Store, who: dict, employee_id: str, changes: dict, reason:
 
 
 def fire(store: Store, market, who: dict, employee_id: str, reason: str,
-         tokens: dict, tokens_path: Path | None) -> dict:
+         tokens: dict, tokens_path: Path | None, replace: bool = True) -> dict:
+    """replace=False closes the seat instead of refilling it -- an office-size decision, so the boss's only."""
     _target(store, who, employee_id)
+    if not replace and who["role"] != "boss":
+        raise StaffRefused("only the boss can close a seat; the manager's firing always hires a successor")
     with store.lock:
         store.x("UPDATE employees SET fired_ts = ? WHERE id = ?", (now(), employee_id))
         unclosed = []
@@ -70,12 +73,17 @@ def fire(store: Store, market, who: dict, employee_id: str, reason: str,
             except positions.Refused:
                 unclosed.append(p["id"])          # stale feed: the max_hold backstop closes it later
         seat = employee_id.split(".")[0]
-        gen = len(store.q("SELECT id FROM employees WHERE id = ? OR id LIKE ?", (seat, seat + ".%"))) + 1
-        successor = f"{seat}.{gen}"
-        store.hire(successor, "trader")
-        for t, w in tokens.items():
+        successor = None
+        if replace:
+            gen = len(store.q("SELECT id FROM employees WHERE id = ? OR id LIKE ?", (seat, seat + ".%"))) + 1
+            successor = f"{seat}.{gen}"
+            store.hire(successor, "trader")
+        for t, w in list(tokens.items()):
             if w["id"] == employee_id:
-                tokens[t] = {"id": successor, "role": "trader"}
+                if successor:
+                    tokens[t] = {"id": successor, "role": "trader"}
+                else:
+                    del tokens[t]
         if tokens_path:
             tokens_path.write_text(json.dumps(tokens, indent=1))
     store.emit(who["id"], "fire", {"employee": employee_id, "successor": successor, "reason": reason[:500],

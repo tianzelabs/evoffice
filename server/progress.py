@@ -24,11 +24,11 @@ from datetime import datetime, timedelta, timezone
 from .store import Store
 
 LEVELS = [  # (min XP, title, max_size BTC, daily budget USD)
-    (0, "Junior", 0.005, 0.30),
-    (60, "Associate", 0.01, 0.30),
-    (150, "Trader", 0.02, 0.30),
-    (300, "Senior", 0.035, 0.35),
-    (600, "Lead", 0.05, 0.40),
+    (0, "Junior", 0.005, 0.50),          # one trader at $0.50/day (user, 2026-10-10)
+    (60, "Associate", 0.01, 0.50),
+    (150, "Trader", 0.02, 0.50),
+    (300, "Senior", 0.035, 0.55),
+    (600, "Lead", 0.05, 0.60),
 ]
 PROBATION_AFTER = timedelta(hours=24)
 BADGES = {

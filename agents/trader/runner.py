@@ -38,6 +38,7 @@ from rlm import RLM
 from rlm.logger import RLMLogger
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from agents.common.hours import on_duty   # noqa: E402
 from agents.common.office_client import Office, Refused   # noqa: E402
 from agents.trader import map as mapmod                    # noqa: E402
 from agents.trader.version import strategy_version          # noqa: E402
@@ -52,6 +53,12 @@ FIRED_EXIT = 75                                                       # non-zero
 MIN_GAP_S = int(os.environ.get("TRADER_MIN_GAP_S", "120"))      # never two turns closer than this
 BARS_MIN = 1440
 MIN_BUDGET_USD = 0.005
+# "tool" (2026-10-10, the user's design): the trader does not act on its own impulses. The manager
+# hands it tasks (`task` events); each task is one RLM turn in the trader's persistent REPL, and the
+# result goes back as a `task_result`. should_wake no longer wakes the trader: it raises a `trigger`
+# that wakes the MANAGER. Only the boss still talks to the trader directly. "self" is the old mode.
+MODE = os.environ.get("TRADER_MODE", "tool")
+TRIGGER_GAP_S = 30 * 60
 
 
 def log(*a):
@@ -78,6 +85,8 @@ class Runner:
         self.chat_recent: list[dict] = []
         self.chat_new: list[dict] = []
         self.news: list[str] = []            # the office's own calls: stand-ups and market alerts
+        self.tasks: list[dict] = []          # tool mode: the manager's tasks, oldest first
+        self.last_trigger = 0.0
         self.facts: dict[str, tuple[str, str, str]] = {}
         self.notes: list[str] = []
         self.last_trigger_error = None
@@ -296,6 +305,8 @@ class Runner:
             bar_note = f"+{len(new)} new bars since the last refresh"
         evs = self.office.events(self.last_seen)
         says = [e for e in evs if e["kind"] == "say"]
+        self.tasks += [{"id": e["id"], "from": e["actor"], "text": e["payload"]["text"]} for e in evs
+                       if e["kind"] == "task" and e["payload"].get("to") == self.me]
         for e in evs:
             if e["kind"] == "meeting" and e["payload"].get("phase") == "start":
                 self.news.append("daily stand-up at the meeting table: tell the manager (say to it) what you changed "
@@ -357,6 +368,8 @@ class Runner:
             since = evs[-1]["id"]
 
     def wake_reasons(self) -> list[str]:
+        if MODE == "tool":
+            return self.tool_wake_reasons()
         reasons = []
         for c in self.chat_new:
             # addressed to me, or the boss/manager speaking to everyone -- not a message to another trader
@@ -386,6 +399,32 @@ class Runner:
             reasons.append(f"heartbeat (every {hb // 60} min)")
         return reasons
 
+    def tool_wake_reasons(self) -> list[str]:
+        reasons = []
+        boss = [c for c in self.chat_new if c["from"] == "boss" and c["to"] in (None, self.me)]
+        if boss:
+            reasons.append("a chat message from the boss")
+        if not boss:
+            self.chat_new = []        # colleagues' chat does not wake a tool-mode trader; chat_recent keeps it
+        sw = self.ns.get("should_wake")
+        if callable(sw) and on_duty():
+            try:
+                fired = bool(sw(list(self.bars)))
+                self.last_trigger_error = None
+            except Exception as e:
+                err = f"{type(e).__name__}: {str(e)[:200]}"
+                fired = err != self.last_trigger_error          # tell the manager once per distinct failure
+                self.last_trigger_error = err
+                if fired:
+                    self.office.report("trigger", {"text": f"should_wake raised {err}"})
+                    self.last_trigger = time.time()
+                fired = False
+            if fired and time.time() - self.last_trigger >= TRIGGER_GAP_S:
+                px = self.bars[-1]["c"] if self.bars else None
+                self.office.report("trigger", {"text": f"should_wake(bars) returned True at {px}"})
+                self.last_trigger = time.time()
+        return reasons
+
     def rotate_log(self):
         """One trajectory file per UTC day, so yesterday's can be compressed (~3-4 MB a turn)."""
         day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -393,7 +432,7 @@ class Runner:
             self.rlm.logger = RLMLogger(log_dir=str(STATE / "trajectories"), file_name=f"{self.me}_{day}")
             self.log_day = day
 
-    def turn(self, reasons: list[str]):
+    def turn(self, reasons: list[str], task: dict | None = None):
         # set first: a turn that fails anywhere still backs off by MIN_GAP_S instead of
         # retrying every minute (found live: a map bug re-woke the trader each minute)
         self.last_turn = time.time()
@@ -408,9 +447,18 @@ class Runner:
         notes, self.notes = self.notes, []
         if not getattr(self, "my_name", None):
             notes = notes + ["you have no name yet -- choose one for yourself with set_name(...)"]
-        root = (mapmod.render(self.ns, self.facts, self.tool_sigs, reasons, notes, self.version)
-                + "\n\nTASK: handle what woke you. Look at the data you need, decide whether to act, and change "
-                  "your strategy objects if you learned something. Then set answer and finish.")
+        if task:
+            ask = (f"\n\nTASK #{task['id']} from {task['from']}:\n{task['text']}\n\n"
+                   "Do it in your REPL with code -- data, models, backtests, orders, whatever it takes -- and keep "
+                   "anything worth keeping (functions, models, results) as named objects so a later task can use "
+                   "them. Then set answer['content'] to the RESULT the manager asked for: the numbers, what you "
+                   "defined or changed, what you placed or closed, and anything that went wrong. Then finish.")
+        elif MODE == "tool":
+            ask = ("\n\nTASK: answer the boss (say to it). Do anything the boss asks. Then set answer and finish.")
+        else:
+            ask = ("\n\nTASK: handle what woke you. Look at the data you need, decide whether to act, and change "
+                   "your strategy objects if you learned something. Then set answer and finish.")
+        root = mapmod.render(self.ns, self.facts, self.tool_sigs, reasons, notes, self.version) + ask
         t0 = time.perf_counter()
         summary, cost, tin, tout, err = "", None, None, None, None
         try:
@@ -431,6 +479,10 @@ class Runner:
             self.version = v
         self.office.report("turn", {"turn": self.turn_n, "secs": round(time.perf_counter() - t0, 1), "cost": cost,
                                     "in_tok": tin, "out_tok": tout, "summary": (summary or "")[:500], "error": err})
+        if task:
+            self.office.report("task_result", {"task": task["id"], "summary": (summary or "")[:3500], "error": err,
+                                               "cost": cost, "secs": round(time.perf_counter() - t0, 1),
+                                               "version": self.version})
         self.office.report("agent_state", {"state": "idle"})
         self.snapshot()
         log(f"turn {self.turn_n} done in {time.perf_counter() - t0:.0f}s cost {cost} version {self.version}: {summary[:120]!r}")
@@ -445,17 +497,24 @@ class Runner:
                 self.check_employment()
                 note = self.refresh()
                 reasons = self.wake_reasons()
-                if not reasons or time.time() - self.last_turn < MIN_GAP_S:
+                task = self.tasks.pop(0) if MODE == "tool" and self.tasks else None
+                if task:
+                    reasons = [f"task #{task['id']} from {task['from']}"] + reasons
+                elif not reasons or time.time() - self.last_turn < MIN_GAP_S:
                     continue
                 left = self.office.budget()["left_usd"]
                 if left < MIN_BUDGET_USD:                    # asleep until the budget resets -- and say so
                     if not self.asleep_said:
                         self.office.report("agent_state", {"state": "asleep", "why": f"model budget spent; woke for: {'; '.join(reasons)}"})
                         self.asleep_said = True
+                    if task:
+                        self.office.report("task_result", {"task": task["id"], "summary": "",
+                                                           "error": f"not done: the trader's model budget for today "
+                                                                    f"is spent (${left:.3f} left)"})
                     continue
                 self.asleep_said = False
                 self.write_facts(note)
-                self.turn(reasons)
+                self.turn(reasons, task)
             except Exception as e:
                 log("loop error:", type(e).__name__, str(e)[:300])
                 traceback.print_exc()

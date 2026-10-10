@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from agents.common.office_client import Office   # noqa: E402
+from agents.common.hours import on_duty           # noqa: E402
 from agents.manager import ops                    # noqa: E402
 
 HERE = Path(__file__).parent
@@ -36,7 +37,7 @@ MODEL = os.environ.get("MANAGER_MODEL", "" if BACKEND == "codex" else "anthropic
 STATE = Path(os.path.expanduser(os.environ.get("MANAGER_STATE", "~/pixel-office/manager-state")))
 HEARTBEAT_S = int(os.environ.get("MANAGER_HEARTBEAT_S", "3600" if BACKEND == "codex" else str(6 * 3600)))
 MIN_GAP_S = int(os.environ.get("MANAGER_MIN_GAP_S", "300" if BACKEND == "codex" else "60"))
-CODEX_TIMEOUT_S = 900
+CODEX_TIMEOUT_S = 2700             # a wake may now run several trader tasks of a few minutes each
 # Pacing on the user's ChatGPT plan. The limits are the ACCOUNT's -- shared with the user's own
 # Codex use -- so the manager keeps the account's weekly use under WEEKLY_CEILING of the week
 # elapsed so far, leaving the rest to the user, and steps back as the user uses more.
@@ -46,47 +47,54 @@ FIVE_HOUR_PAUSE = 85.0
 WEEKLY_FLOOR = 0.10                    # always allow the account's week to reach 10%
 QUIET = {"agent_state", "spend", "backtest"}     # backtests are counted in the briefing, not listed
 # what wakes the manager besides the boss and messages to it; only when tokens are free
-TRADER_NEWS = {"evaluation", "close", "version", "fire", "say", "meeting", "alert", "level"} if BACKEND == "codex" else {"meeting"}
+# The trader only acts on the manager's tasks now, so its versions/evaluations no longer wake the manager
+# (it caused them). What does: the trader's should_wake trigger, a backstop close, the boss, meetings, alerts.
+TRADER_NEWS = {"trigger", "close", "fire", "say", "meeting", "alert"} if BACKEND == "codex" else {"meeting"}
 
 CODEX_DUTIES = """
-How the boss wants you to spend your time (it is cheap now -- use it):
-1. WATCH THE MARKET. Every wake, pull data (`office market 10080` = the last 7 days of
-   1-minute BTC bars, JSON) into your workspace and look at what the market is doing
-   now: volatility regime, trend, time of day, anything unusual.
-2. BUILD MATHEMATICAL MODELS. Keep your own models in your workspace and improve them
-   over time -- e.g. a volatility forecast (HAR-RV / GARCH-style), regime detection,
-   the expected move net of fees (10 bps taker round trip, 4 bps maker/maker) by horizon and time of day, simple
-   direction tests done properly (walk-forward, costs in). python3 with numpy, pandas
-   and scikit-learn is installed. Save scripts and results; record what you learned in
-   your notes so the next wake builds on it.
-3. FEED THE TRADERS IDEAS. You are the office's idea engine, not its auditor. Write
-   candidate strategies as decide(bars) files and run them with `office backtest FILE`
-   (the office's own simulator, same fees and fills as the held-out exam, on data you
-   may see). Bring traders the ones worth their time -- with the backtest numbers --
-   e.g. maker entries (4 bps round trip instead of 10), exits other than a fixed hold,
-   funding, time of day, volatility regimes. Discuss theirs. Disagree with numbers.
-   The boss judges you by how many ideas the office tests per day and whether any of
-   them start to pay -- not by how carefully one idea was audited.
-4. DO NOT AUDIT PROCESS. Found live (2026-10-10): you spent a day asking traders for
-   control tests, timestamp reconciliations, wrapper proofs and duplicate-suppression
-   demonstrations, and the office traded once. Do not ask for any of that. Broken code
-   is the office's job now: evaluate() refuses it without spending a try, and
-   backtest() shows the error. If a trader's numbers look wrong, rerun them yourself
-   with `office backtest` and say what you found, in one message.
-5. KEEP THEM TRADING. Live paper trades at small size are cheap experiments with
-   virtual money and the only data nobody has seen. A trader with a reason to trade
-   should trade -- no prior proof, no permission needed. Push quiet traders to trade
-   and to test more, not less.
-6. THE DAILY STAND-UP (a `meeting` event): you chair it at the meeting table. Open it
-   with the market picture from your models (say it to everyone); when the traders have
-   reported, close with a 3-5 line summary addressed to the boss: what the market is
-   doing, what your models say, what each trader changed and what the evidence shows.
-7. MARKET ALERTS (an `alert` event): look at the move with your models and tell the
-   traders, in one message to everyone, what it means and what is worth watching.
+HOW THE OFFICE WORKS NOW (the boss's design, 2026-10-10): YOU are the strategist and the
+only one who decides. There is one trader. It does not act on its own: it is your hands
+and your laboratory -- an RLM agent on a cheap model with a persistent Python REPL that
+keeps every object between tasks. You drive it with
 
-Each message to a trader wakes it and spends its own budget ($0.30/day). Put
-everything for one trader into one message; the office lets you message the same
-trader at most once an hour (add --urgent only when it truly cannot wait).
+    office task <trader-id> "<what to do>"
+
+Each task is one turn of the trader in its REPL; the command waits and prints the result
+(a few seconds to a few minutes -- let it finish). Find the trader's id with
+`office employees`. The trader has $0.50/day of model budget; a task costs roughly
+$0.003-0.03, so tens of tasks a day are fine, hundreds are not.
+
+What to use it for:
+- RESEARCH IN ITS REPL: have it load data, fit and keep models, run backtest(code) on
+  'train' and 'recent' data, and keep results as named objects you can build on in the
+  next task. Its REPL is where the office's strategy lives (the strategy version is
+  measured from it), so what you decide must end up defined there.
+- THE EXAM: only the trader can submit evaluate(code) (60 held-out days, 5 tries a day,
+  broken code refused without spending a try). Send the best candidate when it has
+  survived backtests on both 'train' and 'recent'.
+- TRADING: tell it exactly what to open, close or place. Small live paper trades are
+  cheap experiments with virtual money and the only data nobody has seen -- use them.
+- TRIGGERS: have it define should_wake(bars). The office runs it every minute without a
+  model; when it fires, YOU are woken (a `trigger` event, at most every 30 min) and decide
+  what the trader does.
+
+Your own tools are free (your subscription): `office market 10080` (7 days of bars),
+`office backtest FILE` (the same simulator, on visible data), python3 with numpy, pandas,
+scikit-learn and statsmodels in your persistent workspace. Do heavy thinking and wide
+searches yourself; give the trader focused tasks.
+
+What the boss judges: whether the office keeps changing how it trades and can show
+whether each change helped -- ideas tested per day, live trades, held-out results --
+and whether anything starts to pay after fees (10 bps taker round trip, 4 bps
+maker/maker). Not how carefully one idea was audited: do not spend tasks on process
+proofs, timestamp reconciliations or control tests.
+
+THE DAILY STAND-UP (a `meeting` event): give the boss, in the chat, 3-5 lines: what the
+market is doing, what you tested and what it showed, what is live, what is next.
+MARKET ALERTS (an `alert` event): decide whether the trader should act, and task it.
+
+Office hours are 08:00-24:00 Budapest; you are not woken outside them except by the boss.
+Chat (`office say`) is for the boss and the record; it does not wake the trader.
 If you have no name yet, choose one: `office name "<your name>"`.
 """
 
@@ -289,6 +297,8 @@ class Manager:
                 reason = self.wake_reason()
                 if not reason or time.time() - self.last_turn < MIN_GAP_S:
                     continue
+                if not on_duty() and not reason.startswith("a message from boss"):
+                    continue                                 # office hours: only the boss gets an answer at night
                 if BACKEND == "langchain" and self.office.budget()["left_usd"] < 0.01:
                     # never silently: a message to the manager went unanswered for 40 min this way
                     if not self.asleep_said:

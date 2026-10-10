@@ -60,11 +60,11 @@ def test_a_model_off_the_allowlist_is_refused_and_costs_nothing(office):
 def test_the_budget_is_a_wall(office):
     c, _, seen = office
     big = {**CHAT, "messages": [{"role": "user", "content": "expensive"}]}
-    for _ in range(3):                                  # 3 x $0.12 crosses the $0.30 trader cap
+    for _ in range(5):                                  # 5 x $0.12 crosses the $0.50 trader cap
         c.post("/llm/v1/chat/completions", json=big, headers=H("t1"))
     r = c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1"))
     assert r.status_code == 429 and "budget for trader-1 is spent" in r.json()["detail"]
-    assert len(seen) == 3                               # the refused call never left the office
+    assert len(seen) == 5                               # the refused call never left the office
 
 
 def test_output_length_is_capped_by_the_office(office):
@@ -86,7 +86,7 @@ def test_each_trader_has_its_own_budget(tmp_path):
     store = Store(str(tmp_path / "o.db"))
     gw = llm.Gateway(store, key="k", transport=httpx.MockTransport(upstream))
     c = TestClient(create_app(store, FakeMarket(), tokens, backstop_every_s=0, gateway=gw))
-    for _ in range(3):
+    for _ in range(5):
         c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1"))
     assert c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1")).status_code == 429
     assert c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t2")).status_code == 200   # untouched by trader-1

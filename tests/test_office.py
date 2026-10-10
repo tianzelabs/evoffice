@@ -106,3 +106,25 @@ def test_leaderboard_lists_idle_traders_and_scores_per_version(office):
     assert by_emp["trader-1"]["trades"] == 2
     versions = {r["strategy_version"]: r for r in b["by_version"]}
     assert versions["v1"]["net_pnl"] < 0 < versions["v2"]["net_pnl"]
+
+
+
+def test_the_manager_hands_a_trader_tasks_and_reads_the_result(office):
+    c, _, _ = office
+    t = c.post("/tasks", json={"to": "trader-1", "text": "backtest a 30m fade"}, headers=H("m"))
+    assert t.status_code == 200
+    assert c.post("/tasks", json={"to": "trader-1", "text": "x"}, headers=H("t1")).status_code == 403
+    tid = t.json()["id"]
+    assert c.get(f"/tasks/{tid}").json()["status"] == "pending"
+    c.post("/report", json={"kind": "task_result", "payload": {"task": tid, "summary": "-6 bps"}}, headers=H("t1"))
+    r = c.get(f"/tasks/{tid}").json()
+    assert r["status"] == "done" and r["summary"] == "-6 bps" and r["by"] == "trader-1"
+
+
+def test_only_the_boss_closes_a_seat(tmp_path):
+    tokens = {k: dict(v) for k, v in TOKENS.items()}
+    c = TestClient(create_app(Store(str(tmp_path / "o.db")), FakeMarket(), tokens, backstop_every_s=0))
+    assert c.post("/employees/trader-2/fire", json={"reason": "x", "replace": False}, headers=H("m")).status_code == 409
+    r = c.post("/employees/trader-2/fire", json={"reason": "one trader for now", "replace": False}, headers=H("b"))
+    assert r.status_code == 200 and r.json()["successor"] is None and "t2" not in tokens
+    assert c.get("/me", headers=H("t2")).status_code == 401

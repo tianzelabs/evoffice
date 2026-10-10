@@ -12,7 +12,10 @@
     office backtest FILE [--data train|recent] [--days N]
                                          run a decide(bars) strategy file through the office's own simulator
                                          (same fees and fills as the held-out exam) on data you may see
-    office say TEXT [--to WHO] [--urgent]  speak in the public chat (to a trader: at most once an hour)
+    office task TRADER TEXT [--wait S]   give the trader a task; it runs one turn in its REPL and you get the
+                                         result (waits up to S seconds, default 600)
+    office task-result ID                the result of an earlier task
+    office say TEXT [--to WHO] [--urgent]  speak in the public chat (does not wake the trader)
     office name NAME                     choose your own name
     office params TRADER --reason R [--heartbeat-min N] [--max-size X] [--max-hold-min N]
     office fire TRADER --reason R        fire a trader (rarely)
@@ -38,6 +41,8 @@ def main(argv: list[str]) -> str:
     p = sub.add_parser("positions"); p.add_argument("trader")
     od = sub.add_parser("orders"); od.add_argument("trader")
     gl = sub.add_parser("golive"); gl.add_argument("trader")
+    tk = sub.add_parser("task"); tk.add_argument("trader"); tk.add_argument("text"); tk.add_argument("--wait", type=int, default=600)
+    tr = sub.add_parser("task-result"); tr.add_argument("id", type=int)
     bt = sub.add_parser("backtest"); bt.add_argument("file"); bt.add_argument("--data", default="train")
     bt.add_argument("--days", type=float, default=30)
     m = sub.add_parser("market"); m.add_argument("minutes", nargs="?", type=int, default=120)   # up to 10080 (7 days)
@@ -58,6 +63,8 @@ def main(argv: list[str]) -> str:
     if args.cmd == "orders": return ops.trader_orders(o, args.trader)
     if args.cmd == "golive": return ops.golive(o, args.trader)
     if args.cmd == "market": return ops.market(o, args.minutes)
+    if args.cmd == "task": return ops.task(o, args.trader, args.text, args.wait)
+    if args.cmd == "task-result": return ops.task_result(o, args.id)
     if args.cmd == "backtest": return ops.backtest(o, open(args.file).read(), args.data, args.days)
     if args.cmd == "say": return ops.say(o, args.text, args.to, args.urgent)
     if args.cmd == "name": return ops.set_name(o, args.name)

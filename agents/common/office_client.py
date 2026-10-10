@@ -74,6 +74,12 @@ class Office:
         # finished, recorded the result and spent one of the day's tries (found live)
         return self.post("/evaluate", {"code": code, "version": version}, timeout=300)
 
+    def task(self, to: str, text: str) -> dict:
+        return self.post("/tasks", {"to": to, "text": text})
+
+    def task_status(self, task_id: int) -> dict:
+        return self.get(f"/tasks/{task_id}")
+
     def backtest(self, code: str, data: str = "train", days: float = 30) -> dict:
         return self.post("/backtest", {"code": code, "data": data, "days": days}, timeout=300)
 

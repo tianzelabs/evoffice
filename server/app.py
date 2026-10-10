@@ -39,7 +39,7 @@ class Say(BaseModel):
     to: str | None = None
 
 
-REPORTABLE = {"wake", "version", "agent_state", "turn"}   # what an agent may say about itself
+REPORTABLE = {"wake", "version", "agent_state", "turn", "task_result", "trigger"}   # what an agent may say about itself
 
 
 class Report(BaseModel):
@@ -56,6 +56,12 @@ class Params(BaseModel):
 
 class Fire(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+    replace: bool = True
+
+
+class Task(BaseModel):
+    to: str
+    text: str = Field(min_length=1, max_length=6000)
 
 
 class Name(BaseModel):
@@ -284,7 +290,8 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     @app.post("/employees/{employee_id}/fire")
     async def fire(employee_id: str, body: Fire, w: dict = Depends(who)):
         try:
-            return await run_in_threadpool(staff.fire, store, market, w, employee_id, body.reason, tokens, tokens_path)
+            return await run_in_threadpool(staff.fire, store, market, w, employee_id, body.reason, tokens, tokens_path,
+                                           body.replace)
         except staff.StaffRefused as e:
             raise HTTPException(409, str(e))
 
@@ -295,6 +302,26 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             return await run_in_threadpool(evaluation.evaluate, store, market, w, body.code, eval_runner, body.version)
         except evaluation.EvalRefused as e:
             raise HTTPException(409, str(e))
+
+    @app.post("/tasks")
+    def give_task(body: Task, w: dict = Depends(who)):
+        """The manager (or boss) hands a trader a task. The trader's runner runs ONE RLM turn on it in
+        the trader's own REPL and reports a `task_result` naming this task's event id."""
+        if w["role"] not in ("manager", "boss"):
+            raise HTTPException(403, "only the manager or the boss gives tasks")
+        emp = store.employee(body.to)
+        if not emp or emp["role"] != "trader" or emp["fired_ts"]:
+            raise HTTPException(409, f"no working trader {body.to!r}")
+        return store.emit(w["id"], "task", {"to": body.to, "text": body.text})
+
+    @app.get("/tasks/{task_id}")
+    def task_status(task_id: int):
+        rows = store.q("SELECT id, ts, actor, payload FROM events WHERE kind = 'task_result' "
+                       "AND json_extract(payload, '$.task') = ? ORDER BY id DESC LIMIT 1", (task_id,))
+        if not rows:
+            return {"task": task_id, "status": "pending"}
+        r = rows[0]
+        return {"task": task_id, "status": "done", "ts": r["ts"], "by": r["actor"], **json.loads(r["payload"])}
 
     @app.post("/backtest")
     async def backtest(body: Backtest, w: dict = Depends(who)):

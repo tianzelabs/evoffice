@@ -115,6 +115,28 @@ def progress(office: Office) -> str:
     return json.dumps(_safe(lambda: office.get("/progress")), ensure_ascii=False)
 
 
+def task(office: Office, trader: str, text: str, wait_s: int = 600) -> str:
+    """Hand the trader a task and wait for its result. The trader runs one RLM turn in its own REPL."""
+    import time as _t
+    if DRY:
+        return _dry({"task": text, "to": trader})
+    t = _safe(lambda: office.task(trader, text))
+    if "error" in t:
+        return t["error"]
+    deadline = _t.time() + wait_s
+    while _t.time() < deadline:
+        _t.sleep(5)
+        r = _safe(lambda: office.task_status(t["id"]))
+        if r.get("status") == "done":
+            return json.dumps(r, ensure_ascii=False)
+    return (f"task {t['id']} is still running after {wait_s}s; check later with `office task-result {t['id']}` "
+            "(it also appears in your next briefing)")
+
+
+def task_result(office: Office, task_id: int) -> str:
+    return json.dumps(_safe(lambda: office.task_status(task_id)), ensure_ascii=False)
+
+
 def backtest(office: Office, code: str, data: str = "train", days: float = 30) -> str:
     return json.dumps(_safe(lambda: office.backtest(code, data, days)), ensure_ascii=False)
 

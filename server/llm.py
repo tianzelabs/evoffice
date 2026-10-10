@@ -22,7 +22,7 @@ import httpx
 from .store import Store
 
 UPSTREAM = "https://openrouter.ai"
-BUDGET_USD = {"trader": 0.30, "manager": 0.20}                    # per EMPLOYEE, per UTC day (user, 2026-10-09)
+BUDGET_USD = {"trader": 0.50, "manager": 0.20}                    # per EMPLOYEE, per UTC day (user, 2026-10-10)
 ALLOWED = {
     # haiku-5.5 for trader-1; gemini-3.1-flash-lite for trader-2 -- the only other candidate that kept
     # should_wake and reported its own change truthfully (gpt-5-mini, deepseek-v4-flash failed both)
