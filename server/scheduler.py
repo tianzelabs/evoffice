@@ -70,11 +70,17 @@ def review_tick(store: Store, now: datetime) -> dict | None:
             return None
         since = last["ts"].isoformat() if last else (at - timedelta(hours=4)).astimezone(timezone.utc).isoformat()
         daily = i == len(times) - 1
-        p = {"since": since, "until": now.isoformat(), "daily": daily, "at": now.isoformat(),
-             "agenda": ("END-OF-DAY review of the whole day" if daily else "lookback review since the last one")
-                       + ": find the moves we missed (and the trades that went wrong), describe the market state "
-                         "BEFORE each with market_context, compare it with ordinary times, add them to the "
-                         "opportunity journal in the shared REPL, and turn what recurs into hypotheses to test"}
+        if daily:
+            agenda = ("END-OF-DAY review: put today's missed opportunities next to today's actual trades. Which "
+                      "moves did we catch, which did we miss, which trades lost and why; what did the market look "
+                      "like before each (market_context); what do the trade journal and the opportunity journal say "
+                      "together; what rule changes tomorrow because of it")
+        else:
+            agenda = ("lookback review since the last one: find the moves we missed (and the trades that went "
+                      "wrong), describe the market state BEFORE each with market_context, compare it with ordinary "
+                      "times, add them to the opportunity journal in the shared REPL, and turn what recurs into "
+                      "hypotheses to test")
+        p = {"since": since, "until": now.isoformat(), "daily": daily, "at": now.isoformat(), "agenda": agenda}
         store.emit("office", "review", p)
         return p
     return None

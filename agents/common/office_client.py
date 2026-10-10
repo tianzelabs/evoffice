@@ -42,6 +42,7 @@ class Office:
     def report(self, kind: str, payload: dict) -> dict: return self.post("/report", {"kind": kind, "payload": payload})
     def price(self) -> dict: return self.get("/price")
     def bars(self, minutes: int) -> list[dict]: return self.get("/bars", minutes=minutes)
+    def trade_review(self, position_id: int) -> dict: return self.get(f"/positions/{position_id}/review")
     def context(self, minutes: int) -> list[dict]: return self.get("/market/context", minutes=minutes)
     def events(self, since: int) -> list[dict]: return self.get("/events", since=since)
     def positions(self, employee: str, open_only: bool = False) -> list[dict]:

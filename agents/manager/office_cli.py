@@ -10,6 +10,7 @@
     office objective                     your objective ladder (minus -> plus), computed by the office
     office golive TRADER                 the checklist for moving a trader to a real Kraken account
     office market [MINUTES]              BTC price and recent 1-minute bars
+    office trade-review POSITION_ID      a trade by the numbers: pnl, MFE/MAE, the 15 min before, the minutes after
     office context [MINUTES]             the market's state per minute: taker flow, book imbalance, spread,
                                          basis, funding, open interest (also market_context() in the REPL)
     office backtest FILE [--data train|recent] [--days N]
@@ -56,6 +57,7 @@ def main(argv: list[str]) -> str:
     tr = sub.add_parser("task-result"); tr.add_argument("id", type=int)
     bt = sub.add_parser("backtest"); bt.add_argument("file"); bt.add_argument("--data", default="train")
     bt.add_argument("--days", type=float, default=30)
+    trv = sub.add_parser("trade-review"); trv.add_argument("position_id", type=int)
     cx = sub.add_parser("context"); cx.add_argument("minutes", nargs="?", type=int, default=120)
     m = sub.add_parser("market"); m.add_argument("minutes", nargs="?", type=int, default=120)   # up to 10080 (7 days)
     s = sub.add_parser("say"); s.add_argument("text"); s.add_argument("--to"); s.add_argument("--urgent", action="store_true")
@@ -76,6 +78,7 @@ def main(argv: list[str]) -> str:
     if args.cmd == "objective": return json.dumps(o.get("/objective"), ensure_ascii=False)
     if args.cmd == "golive": return ops.golive(o, args.trader)
     if args.cmd == "market": return ops.market(o, args.minutes)
+    if args.cmd == "trade-review": return ops.trade_review(o, args.position_id)
     if args.cmd == "context": return ops.context(o, args.minutes)
     if args.cmd == "repl":
         code = open(args.file).read() if args.file else args.code

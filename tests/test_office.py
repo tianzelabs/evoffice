@@ -167,3 +167,12 @@ def test_market_context_is_served(office):
     c, _, _ = office
     rows = c.get("/market/context?minutes=5").json()
     assert len(rows) == 5 and {"flow_imb", "taker_buy", "trades"} <= set(rows[0])
+
+
+def test_a_closed_trade_can_be_reviewed_by_the_numbers(office):
+    c, m, _ = office
+    pid = c.post("/positions/open", json={"side": "long", "size": 0.005}, headers=H("t1")).json()["id"]
+    c.post(f"/positions/{pid}/close", headers=H("t1"))
+    r = c.get(f"/positions/{pid}/review").json()
+    assert r["position"] == pid and r["open"] is False and r["pnl_bps"] < 0 and r["hold_min"] >= 0
+    assert c.get("/positions/999/review").status_code == 404

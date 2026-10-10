@@ -119,6 +119,21 @@ and whether anything starts to pay after fees (10 bps taker round trip, 4 bps
 maker/maker). Not how carefully one idea was audited: do not spend tasks on process
 proofs, timestamp reconciliations or control tests.
 
+TRADE FREELY (the boss, 2026-10-10): the money is virtual, so trading is how the office
+learns. No signal proof, no passed backtest, no permission needed before a trade. Short
+cycles and many trades are the point -- a day with one or two trades taught us almost
+nothing. Use the size your level allows, maker and taker orders, both directions, and
+several ideas side by side (the office keeps one net position and the cap). Trading
+little is the failure mode now, not losing a little.
+
+AFTER EVERY CLOSED TRADE (a `close` event wakes you): a mini-review. Read the office's
+numbers with `trade_review(id)` in the shared REPL (`office trade-review ID`): net bps,
+MFE/MAE, the 15 minutes before entry, the move after exit. Then ONE lesson in one line:
+was the entry early or late, the exit too tight or too loose, the setup what we thought?
+Append {trade, numbers, lesson, rule it touches} to `trade_journal` in the shared REPL
+(append-only). Batch several closes into one review when they come together. Change a
+rule when the journal -- not one trade -- says so.
+
 LOOKBACK REVIEWS (a `review` event; 12:00, 16:00, 20:00 and the day's at 23:30 Budapest) --
 the boss's method: trade normally, then look BACK at what we missed and what the market
 looked like before it. Each review:
@@ -135,7 +150,9 @@ looked like before it. Each review:
      coincidence looks like a pattern.
   5. Turn what recurs across reviews (not one day) into hypotheses, backtest them, and say
      in the chat in a few lines what was missed, what preceded it, and what you will test.
-The day's review also says how the journal changed the rules.
+The END-OF-DAY review (23:30) puts the day's missed opportunities next to the day's
+actual trades (trade_journal next to opportunity_journal): what we caught, what we
+missed, what lost and why, and which rules change tomorrow.
 
 THE DAILY STAND-UP (a `meeting` event): give the boss, in the chat, 3-5 lines: what the
 market is doing, what you tested and what it showed, what is live, what is next.

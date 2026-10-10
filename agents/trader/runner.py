@@ -160,6 +160,7 @@ class Runner:
             "cancel_order": {"tool": self._cancel, "description": "cancel_order(order_id)"},
             "say": {"tool": self._say, "description": "say(text, to=None): speak in the office chat; everyone sees it"},
             "jev": {"tool": self._jev, "description": "jev(state, questions): Jev typed judgement; questions = {id: {'type': 'noul'|'choice'|'score', 'instructions': str, 'criteria': ...}}"},
+            "trade_review": {"tool": self._trade_review, "description": "trade_review(position_id): a closed (or open) trade by the numbers: entry/exit, fees, funding, net bps, hold, MFE/MAE (best and worst point during it), the 15 minutes before entry (return, volatility, flow and book imbalance, spread), and the move 5/15/60 min after exit"},
             "market_context": {"tool": self._context, "description": "market_context(minutes): the market's state minute by minute (up to 7 days): bar o/h/l/c/v, and since 2026-10-10 09:00 UTC taker_buy/taker_sell volume, flow_imb, trades, max_trade, spread, book_imb (top-of-book size imbalance), basis_bps (mark vs index), funding_per_hour, open_interest (from 18:00 UTC). For studying what came before a move"},
             "fetch_bars": {"tool": self._fetch_bars, "description": "fetch_bars(minutes): up to 7 days of 1-minute PF_XBTUSD (Kraken BTC perpetual) bars, oldest first"},
             "set_name": {"tool": self._set_name, "description": "set_name(name): choose your own name (shown everywhere instead of your id)"},
@@ -170,7 +171,7 @@ class Runner:
                           "close_position": "(position_id) [market, taker]",
                           "place_order": "(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60) [limit, maker]",
                           "cancel_order": "(order_id)",
-                          "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)", "market_context": "(minutes)",
+                          "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)", "market_context": "(minutes)", "trade_review": "(position_id)",
                           "evaluate": "(code)", "backtest": "(code, data='train', days=30)", "set_name": "(name)"}
         prologue = (HERE / "prompt.md").read_text() + "\n\n" + (HERE / "mechanics.md").read_text()
         self.rlm = RLM(backend="openai",
@@ -258,6 +259,12 @@ class Runner:
     def _backtest(self, code, data="train", days=30):
         try:
             return self.office.backtest(str(code), str(data), float(days))
+        except Refused as e:
+            return {"error": str(e)}
+
+    def _trade_review(self, position_id):
+        try:
+            return self.office.trade_review(int(position_id))
         except Refused as e:
             return {"error": str(e)}
 

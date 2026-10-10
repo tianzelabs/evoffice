@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import broker, fees, objective, iterations, leaderboard, names, orders, positions, progress, scheduler, seasons, staff
+from . import broker, fees, objective, tradereview, iterations, leaderboard, names, orders, positions, progress, scheduler, seasons, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import PRODUCT, FuturesMarket, Stale
@@ -261,6 +261,16 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         try:
             return await run_in_threadpool(market.bars, pair, minutes)
         except (Stale, ValueError) as e:
+            raise HTTPException(503, str(e))
+
+    @app.get("/positions/{position_id}/review")
+    async def trade_review(position_id: int):
+        """The objective half of a trade review: the trade, MFE/MAE, the 15 minutes before, the minutes after."""
+        try:
+            return await run_in_threadpool(tradereview.review, store, market, position_id)
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+        except Stale as e:
             raise HTTPException(503, str(e))
 
     @app.get("/market/context")

@@ -165,6 +165,10 @@ def backtest(office: Office, code: str, data: str = "train", days: float = 30) -
     return json.dumps(_safe(lambda: office.backtest(code, data, days)), ensure_ascii=False)
 
 
+def trade_review(office: Office, position_id: int) -> str:
+    return json.dumps(_safe(lambda: office.trade_review(position_id)), ensure_ascii=False)
+
+
 def context(office: Office, minutes: int) -> str:
     return json.dumps(_safe(lambda: office.context(minutes)))
 
