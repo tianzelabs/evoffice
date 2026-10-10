@@ -10,7 +10,8 @@ from server.store import Store
 
 
 def bars(prices):
-    return [{"m": str(i), "o": p, "h": p, "l": p, "c": p, "v": 1.0} for i, p in enumerate(prices)]
+    return [{"m": f"2026-08-{1 + i // 1440:02d} {(i // 60) % 24:02d}:{i % 60:02d}:00", "o": p, "h": p, "l": p, "c": p,
+             "v": 1.0} for i, p in enumerate(prices)]
 
 
 def test_decide_never_sees_the_future():
@@ -26,10 +27,29 @@ def test_decide_never_sees_the_future():
 
 
 def test_trades_pay_both_fees_and_do_not_overlap():
-    flat = bars([100.0] * 1500)
+    from server.settlement import settle
+    flat = bars([80_000.0] * 1500)
     r = simulate(flat, lambda w: {"side": "long", "hold_minutes": 30}, window=1440)
-    assert r["pnl_bps"] and all(p == pytest.approx(-8.0) for p in r["pnl_bps"])
+    # taker both ways at Kraken tier 1, buying at the ask and selling at the bid (1 USD spread)
+    expected = settle("long", 1.0, 80_000.5, 79_999.5).pnl_bps
+    assert r["pnl_bps"] and all(p == pytest.approx(expected) for p in r["pnl_bps"])
+    assert -11.5 < expected < -10
     assert len(r["pnl_bps"]) == 2              # entered at 1440 and 1470: one at a time, never overlapping
+
+
+def test_a_limit_entry_needs_the_price_traded_through_and_pays_maker():
+    from server.settlement import settle
+    prices = [80_000.0] * 1450 + [79_990.0] * 50          # dips 10 USD: a 1-bp-below limit (79,992) fills
+    b = bars(prices)
+    for i in range(1450, 1500):
+        b[i]["l"] = 79_990.0
+    r = simulate(b, lambda w: {"side": "long", "hold_minutes": 5, "entry": "limit", "offset_bps": 1, "ttl_minutes": 30},
+                 window=1440)
+    assert r["maker_entries"] >= 1
+    assert r["pnl_bps"][0] == pytest.approx(settle("long", 1.0, 79_992.0, 79_989.5, "maker", "taker").pnl_bps)
+    never = simulate(bars([80_000.0] * 1500), lambda w: {"side": "long", "hold_minutes": 5, "entry": "limit",
+                                                          "offset_bps": 5, "ttl_minutes": 30}, window=1440)
+    assert never["pnl_bps"] == [] and never["unfilled_limit_entries"] > 0
 
 
 def test_a_crashing_decide_counts_as_no_trade_and_is_reported():

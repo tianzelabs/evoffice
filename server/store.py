@@ -32,6 +32,11 @@ class Store:
         cols = {r["name"] for r in self.q("PRAGMA table_info(employees)")}
         if "name" not in cols:
             self.x("ALTER TABLE employees ADD COLUMN name TEXT")   # chosen by the agent itself
+        pcols = {r["name"] for r in self.q("PRAGMA table_info(positions)")}
+        for col, ddl in (("entry_liq", "TEXT"), ("exit_liq", "TEXT"), ("entry_fee", "REAL"), ("exit_fee", "REAL"),
+                         ("funding", "REAL NOT NULL DEFAULT 0"), ("regime", "TEXT")):
+            if col not in pcols:                       # Kraken futures fills (2026-10-10); old rows stay as they were
+                self.x(f"ALTER TABLE positions ADD COLUMN {col} {ddl}")
 
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:

@@ -57,7 +57,8 @@ def alert_tick(store: Store, market, now: datetime) -> dict | None:
     if last and now - last["ts"] < ALERT_COOLDOWN:
         return None
     try:
-        bars = market.bars("BTC/USD", 8)
+        from .market import PRODUCT
+        bars = market.bars(PRODUCT, 8)
     except (Stale, ValueError):
         return None
     if len(bars) < 6:
@@ -74,8 +75,10 @@ def alert_tick(store: Store, market, now: datetime) -> dict | None:
 
 
 def tick(store: Store, market, now: datetime | None = None) -> None:
-    from . import seasons
+    from . import funding, seasons
     now = now or datetime.now(timezone.utc)
     meeting_tick(store, now)
     seasons.tick(store, now)
+    if now.minute < 10:                   # funding settles on the hour; apply it once, early in the hour
+        funding.apply(store, market, now)
     alert_tick(store, market, now)

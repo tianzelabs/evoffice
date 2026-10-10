@@ -55,7 +55,7 @@ How the boss wants you to spend your time (it is cheap now -- use it):
    now: volatility regime, trend, time of day, anything unusual.
 2. BUILD MATHEMATICAL MODELS. Keep your own models in your workspace and improve them
    over time -- e.g. a volatility forecast (HAR-RV / GARCH-style), regime detection,
-   the expected move net of the 8 bps round trip by horizon and time of day, simple
+   the expected move net of fees (10 bps taker round trip, 4 bps maker/maker) by horizon and time of day, simple
    direction tests done properly (walk-forward, costs in). python3 with numpy, pandas
    and scikit-learn is installed. Save scripts and results; record what you learned in
    your notes so the next wake builds on it.

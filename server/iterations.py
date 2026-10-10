@@ -59,4 +59,5 @@ def _eval(e: dict) -> dict:
     p = e["payload"]
     return {"ts": e["ts"], "candidate": p.get("candidate"), "version": p.get("version"), "trades": p.get("trades"),
             "net_bps_per_trade": p.get("net_bps_per_trade"), "ci95": p.get("ci95_net_bps_per_trade"),
-            "try": p.get("evaluations_used_today"), "error": p.get("error")}
+            "try": p.get("evaluations_used_today"), "error": p.get("error"),
+            "regime": p.get("regime") or "spot-4bps", "maker_entries": p.get("maker_entries")}

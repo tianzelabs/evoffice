@@ -1,53 +1,50 @@
-"""The fee model -- pure arithmetic, no I/O.
+"""What a position was worth -- pure arithmetic, no I/O.
 
-Carried from agent-world `village/settlement.py`, adapted from fixed-horizon
-contracts to positions the trader closes itself. The three-state terminal
-(won / breakeven / lost) and the 4:33 horizon are gone: the 2026-09-24
-redirection named both as artifacts of the failed era. What stays is the one
-fact this project kept rediscovering:
+Each leg pays its own fee: a TAKER rate when it took liquidity (a market order,
+or a limit order that crossed), a MAKER rate when it rested in the book and was
+filled (server/fees.py: Kraken Futures tier 1 is 0.05% taker, 0.02% maker).
+Funding paid or received while the position was open is added. So a round trip
+costs 10 bps taker/taker, 7 bps maker/taker, 4 bps maker/maker -- and
 
-Both legs pay a 4 bps taker fee, so a round trip costs ~8 bps against a BTC
-spread of ~0.01 bps. **A position that moved the right way can still lose.**
-If `test_a_favourable_move_can_still_LOSE` ever reports a win, this file is
-broken and every number on the leaderboard is meaningless.
+**a position that moved the right way can still lose.** If
+`test_a_favourable_move_can_still_LOSE` ever reports a win, this file is broken
+and every number on the leaderboard is meaningless.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-TAKER_FEE_RATE = 0.0004   # 4 bps per side, charged on both sides
+from . import fees
 
 
 @dataclass(frozen=True)
 class Result:
     gross: float
     fees: float
-    pnl: float            # net: gross - fees
+    funding: float
+    pnl: float            # net: gross - fees + funding
     pnl_bps: float        # net, in bps of entry notional
 
 
-def round_trip_fees(size: float, entry_px: float, exit_px: float) -> float:
-    """Fee on the entry notional plus fee on the exit notional."""
-    return TAKER_FEE_RATE * size * (entry_px + exit_px)
+def leg_fee(size: float, price: float, liquidity: str) -> float:
+    return size * price * fees.rate(liquidity)
 
 
-def settle(side: str, size: float, entry_px: float, exit_px: float) -> Result:
+def settle(side: str, size: float, entry_px: float, exit_px: float, entry_liq: str = "taker",
+           exit_liq: str = "taker", funding: float = 0.0) -> Result:
     if side not in ("long", "short"):
         raise ValueError(f"side must be long or short, got {side!r}")
     if size <= 0 or entry_px <= 0 or exit_px <= 0:
         raise ValueError("size and prices must be positive")
     sign = 1.0 if side == "long" else -1.0
     gross = sign * (exit_px - entry_px) * size
-    fees = round_trip_fees(size, entry_px, exit_px)
-    pnl = gross - fees
-    return Result(gross, fees, pnl, pnl / (size * entry_px) * 10_000.0)
+    paid = leg_fee(size, entry_px, entry_liq) + leg_fee(size, exit_px, exit_liq)
+    pnl = gross - paid + funding
+    return Result(gross, paid, funding, pnl, pnl / (size * entry_px) * 10_000.0)
 
 
-def breakeven_move(entry_px: float) -> float:
-    """Points the price must move in your favour just to pay both fees.
-
-    Size cancels: fees and P&L scale together, so trading smaller or larger
-    does not change it. ~0.0008 x price.
-    """
-    # exit fee is charged on the exit price, so solve m = r*(2p + m) exactly
-    return TAKER_FEE_RATE * 2 * entry_px / (1 - TAKER_FEE_RATE)
+def breakeven_move(entry_px: float, entry_liq: str = "taker", exit_liq: str = "taker") -> float:
+    """Points the price must move in your favour to pay both fees (no funding). Size cancels.
+    Solves m = r_in * p + r_out * (p + m) exactly."""
+    r_in, r_out = fees.rate(entry_liq), fees.rate(exit_liq)
+    return (r_in + r_out) * entry_px / (1 - r_out)

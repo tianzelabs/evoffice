@@ -45,12 +45,15 @@ def used_today(store: Store, employee: str) -> int:
 
 
 def heldout_file(market) -> Path:
-    """One file per UTC day, so the window moves forward daily and is built once."""
+    """One file per UTC day: Kraken PF_XBTUSD candles and the hourly funding for the window."""
+    from ..market import PRODUCT
     CACHE.mkdir(parents=True, exist_ok=True)
-    p = CACHE / f"BTC-USD_{datetime.now(timezone.utc):%Y-%m-%d}.json"
+    p = CACHE / f"{PRODUCT}_{datetime.now(timezone.utc):%Y-%m-%d}.json"
     if not p.exists():
-        bars = market.bars_between("BTC/USD", (HELDOUT_DAYS + GAP_DAYS) * 1440, GAP_DAYS * 1440)
-        p.write_text(json.dumps(bars))
+        bars = market.bars_between(PRODUCT, (HELDOUT_DAYS + GAP_DAYS) * 1440, GAP_DAYS * 1440)
+        t0 = datetime.fromisoformat(bars[0]["m"]).replace(tzinfo=timezone.utc).timestamp() if bars else 0
+        t1 = datetime.fromisoformat(bars[-1]["m"]).replace(tzinfo=timezone.utc).timestamp() + 3600 if bars else 0
+        p.write_text(json.dumps({"bars": bars, "funding": market.funding_history(PRODUCT, t0, t1)}))
     return p
 
 

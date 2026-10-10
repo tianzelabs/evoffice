@@ -478,7 +478,12 @@ export class OfficeScene extends Phaser.Scene {
       case "evaluation":
         this.float(this.over(a), `held-out: ${p.net_bps_per_trade ?? "–"} bps/trade`, (p.net_bps_per_trade ?? -1) > 0 ? "#1b7a3d" : "#c62828");
         break;
-      case "open": this.float({ x: a.home.x, y: a.home.y - 90 }, `OPEN ${p.side} ${p.size}`, "#1d1d1f"); break;
+      case "open": this.float({ x: a.home.x, y: a.home.y - 90 }, `OPEN ${p.side} ${p.size}${p.liquidity === "maker" ? " (maker)" : ""}`, "#1d1d1f"); break;
+      case "order":
+        if (p.status === "placed") this.float({ x: a.home.x, y: a.home.y - 90 }, `LIMIT ${String(p.side).toUpperCase()} @ ${p.price}`, "#1a5fb4");
+        else if (p.status === "filled") this.float({ x: a.home.x, y: a.home.y - 90 }, `${String(p.liquidity).toUpperCase()} FILL @ ${p.price}`, "#1b7a3d");
+        else if (p.status === "rejected") this.float({ x: a.home.x, y: a.home.y - 90 }, "post-only rejected", "#c62828");
+        break;
       case "close": this.float({ x: a.home.x, y: a.home.y - 90 }, `${p.pnl_bps >= 0 ? "+" : ""}${p.pnl_bps} bps`, p.pnl_bps >= 0 ? "#1b7a3d" : "#c62828"); break;
       case "command": {
         const target = this.actors[this.seat(p.employee)];

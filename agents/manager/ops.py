@@ -115,12 +115,20 @@ def progress(office: Office) -> str:
     return json.dumps(_safe(lambda: office.get("/progress")), ensure_ascii=False)
 
 
+def golive(office: Office, trader: str) -> str:
+    return json.dumps(_safe(lambda: office.get(f"/golive/{trader}")), ensure_ascii=False)
+
+
+def trader_orders(office: Office, trader: str) -> str:
+    return json.dumps(_safe(lambda: office.orders(trader))[:30], ensure_ascii=False)
+
+
 def trader_positions(office: Office, trader: str) -> str:
     return json.dumps(_safe(lambda: office.positions(trader))[:50], ensure_ascii=False)
 
 
 def market(office: Office, minutes: int = 120) -> str:
-    """Recent BTC/USD 1-minute bars and the last price -- the manager can check a trader's claims."""
+    """Recent PF_XBTUSD 1-minute bars and the quote (bid/ask/mark/funding) -- to check a trader's claims."""
     return json.dumps({"price": _safe(office.price), "bars": _safe(lambda: office.bars(minutes))}, ensure_ascii=False)
 
 

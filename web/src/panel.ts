@@ -28,8 +28,15 @@ function line(e: OfficeEvent): string | null {
     case "alert": return `<span class="neg"><b>⚠ market alert:</b> ${esc(p.text)}</span>`;
     case "level": return `<span class="sys">${a} reached level ${p.level}: <b>${esc(p.title)}</b> — size cap ${p.max_size} BTC</span>`;
     case "badge": return `<span class="sys">${a} earned a badge: 🏅 ${esc(p.title)}</span>`;
-    case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} @ ${p.entry_px}</span>`;
-    case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}) · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span></span>`;
+    case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} @ ${p.entry_px}${p.liquidity ? ` (${p.liquidity}, fee ${p.fee})` : ""}</span>`;
+    case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}${p.liquidity ? ", " + p.liquidity : ""}) · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span>${p.funding ? ` incl. funding ${p.funding}` : ""}</span>`;
+    case "order": {
+      const what = p.status === "placed" ? `placed a ${p.post_only ? "post-only " : ""}limit ${p.side} ${p.size} @ ${p.price} (${p.intent})`
+        : p.status === "filled" ? `limit ${p.side} @ ${p.price} FILLED as ${p.liquidity}`
+        : p.status === "rejected" ? `limit ${p.side} @ ${p.price} rejected: ${esc(p.why ?? "")}`
+        : `limit ${p.side} @ ${p.price} ${p.status}`;
+      return `<span class="sys">${a} ${what}</span>`;
+    }
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
     case "wake": return `<span class="sys">${a} woke: ${esc((p.reasons || []).join("; "))}</span>`;
     case "version": return `<span class="sys">${a} new strategy version ${esc(p.version || "none")}</span>`;

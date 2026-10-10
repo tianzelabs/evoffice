@@ -30,10 +30,41 @@ CREATE TABLE IF NOT EXISTS positions (
     exit_px          REAL,
     close_reason     TEXT CHECK (close_reason IN ('self', 'max_hold', 'fired')),
     fees             REAL,
-    pnl              REAL
+    pnl              REAL,
+    entry_liq        TEXT,                 -- 'maker' | 'taker' (NULL: legacy spot-4bps rows)
+    exit_liq         TEXT,
+    entry_fee        REAL,
+    exit_fee         REAL,
+    funding          REAL NOT NULL DEFAULT 0,   -- paid (<0) or received (>0) while open, hourly
+    regime           TEXT                  -- fee/market rules the row was priced under (server/fees.py)
 );
 CREATE INDEX IF NOT EXISTS idx_positions_open ON positions(closed_ts);
 CREATE INDEX IF NOT EXISTS idx_positions_employee ON positions(employee_id);
+
+-- Limit orders: resting in the (simulated) book until the market trades THROUGH their price.
+CREATE TABLE IF NOT EXISTS orders (
+    id               INTEGER PRIMARY KEY,
+    employee_id      TEXT NOT NULL REFERENCES employees(id),
+    intent           TEXT NOT NULL CHECK (intent IN ('open', 'close')),
+    position_id      INTEGER,              -- for intent = 'close'
+    pair             TEXT NOT NULL,
+    side             TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+    position_side    TEXT CHECK (position_side IN ('long', 'short')),
+    size             REAL NOT NULL CHECK (size > 0),
+    price            REAL NOT NULL,
+    post_only        INTEGER NOT NULL DEFAULT 1,
+    status           TEXT NOT NULL CHECK (status IN ('open', 'filled', 'cancelled', 'expired', 'rejected')),
+    placed_ts        TEXT NOT NULL,
+    placed_epoch     REAL NOT NULL,
+    expires_epoch    REAL,
+    checked_epoch    REAL NOT NULL,
+    done_ts          TEXT,
+    fill_price       REAL,
+    liquidity        TEXT,
+    strategy_version TEXT,
+    note             TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_orders_open ON orders(status);
 
 -- Append-only. The SSE stream and the chat are reads of this table.
 CREATE TABLE IF NOT EXISTS events (

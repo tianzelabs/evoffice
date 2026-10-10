@@ -59,15 +59,16 @@ def compute(store: Store, employee: str, since: str = "", until: str = "9999") -
     versions = [e for e in evs if e["kind"] == "version"]
     trades = [t for t in store.q("SELECT closed_ts, pnl, strategy_version FROM positions WHERE employee_id = ? "
                                  "AND closed_ts IS NOT NULL ORDER BY closed_ts", (employee,)) if inside(t["closed_ts"])]
-    xp, log, best = 0, [], None
+    xp, log, best = 0, [], {}          # best held-out result per fee/market regime: never compared across
     for e in evals:
         p = e["payload"]
+        reg = p.get("regime") or "spot-4bps"
         xp += 3
-        if best is not None and p["net_bps_per_trade"] >= best + 1:
-            xp += 15; log.append((e["ts"], 15, f"beat own best: {p['net_bps_per_trade']} vs {best} bps"))
+        if reg in best and p["net_bps_per_trade"] >= best[reg] + 1:
+            xp += 15; log.append((e["ts"], 15, f"beat own best: {p['net_bps_per_trade']} vs {best[reg]} bps ({reg})"))
         if (p.get("ci95_net_bps_per_trade") or [0])[0] > 0:
-            xp += 50; log.append((e["ts"], 50, f"edge: interval {p['ci95_net_bps_per_trade']}"))
-        best = p["net_bps_per_trade"] if best is None else max(best, p["net_bps_per_trade"])
+            xp += 50; log.append((e["ts"], 50, f"edge: interval {p['ci95_net_bps_per_trade']} ({reg})"))
+        best[reg] = max(best.get(reg, p["net_bps_per_trade"]), p["net_bps_per_trade"])
     for i, v in enumerate(versions[:-1]):                      # a replaced version that was tested while current
         start, end = v["ts"], versions[i + 1]["ts"]
         tested = any(start <= e["ts"] < end for e in evals) or any(start <= (t["closed_ts"] or "") < end for t in trades)

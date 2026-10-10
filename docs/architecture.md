@@ -17,8 +17,9 @@ Decided with the user on 2026-10-08, revised 2026-10-09 after spikes 1–5
 5. **Own repo.** `agent-world` stays the market-data substrate; this repo only
    reads prices from its ClickHouse.
 6. **The trader closes its own positions.** A max holding time exists only as a
-   backstop. Both legs pay 4bps.
-7. **v0 trades BTC/USD only.**
+   backstop. Fees are Kraken Futures tier 1 (see "Kraken realism" below);
+   the old spot 4bps-a-leg rows are labelled `spot-4bps` and never compared.
+7. **v0 trades BTC only** -- since 2026-10-10 the perpetual `PF_XBTUSD`.
 8. **The trader writes its own data model and calls Jev itself.** It starts
    with shared *mechanics* only — the fee arithmetic, that volatility clusters,
    that the holding horizon is the lever — not with a model or a strategy
@@ -175,6 +176,46 @@ constantly, and in its own REPL it will test on data it has already seen. So:
 
 Open for P1.5: which days are held out, how many evaluations a day, and what the
 evaluator returns (aggregates only, so repeated probing cannot reconstruct it).
+
+## Kraken realism (2026-10-10)
+
+The user trades on a new Kraken account, so the office simulates **Kraken
+Futures tier 1 on real PF_XBTUSD data**. Kraken's own demo environment is
+decommissioned. kraken-cli's paper engine charges the taker rate on every fill
+and cancels a resting post-only order when the price touches it, so the office
+runs its own engine and uses kraken-cli only as a reference.
+
+- **Data**: agent-world `ingestion/futures_capture.py` (WS trades and ticker)
+  and `futures_backfill.py` (1m candles and hourly funding, 120 days).
+- **Fees** (`server/fees.py`): maker 0.02%, taker 0.05% a side. Round trips
+  cost 10 / 7 / 4 bps (taker/taker, maker/taker, maker/maker).
+- **Market orders** fill at the ask / bid as taker. **Limit orders**
+  (`server/orders.py`) are tick 1 USD; post-only orders are rejected if they
+  would cross; a resting order fills at its limit as maker only when a trade
+  prints *through* it (a touch is not a fill).
+- **Funding** (`server/funding.py`) is charged hourly at Kraken's published rate
+  and is part of each position's P&L.
+- **Evaluator** uses the same rules on held-out futures bars, with an optional
+  limit entry.
+- **Parity** (`ops/kraken_parity.py`): market fills agree with kraken-cli paper
+  6/6 on price (+-1 tick) and fee.
+- **Not modelled**: partial fills, depth slippage for large sizes, queue
+  position (a through-fill is the conservative stand-in).
+
+### Going live (`server/broker.py`) -- built, OFF
+
+`GET /golive/{trader}` is a read-only checklist with five items:
+- a held-out 95% interval above zero under the current regime;
+- at least 30 live paper trades of that same version, net positive;
+- the boss's hand-written `~/pixel-office/LIVE_APPROVED.json` (trader, version,
+  max_size);
+- kraken-cli installed;
+- `OFFICE_LIVE_TRADING` set by the user.
+
+`KrakenLive.submit` refuses unless all five pass, and even then is not wired to
+any route. Connecting it is a deliberate code change by the user, who
+configures trade-only API keys (no withdrawal permission) with `kraken setup`
+themselves.
 
 ## Firing
 

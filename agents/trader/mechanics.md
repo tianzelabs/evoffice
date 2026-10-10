@@ -1,12 +1,18 @@
 Shared mechanics -- measured facts about this market and these tools, not a
 strategy. What to do with them is yours.
 
-Fees
-- A round trip costs ~8 bps: 4 bps of notional on entry and 4 bps on exit.
-- To break even a position must move about 0.0008 x price in your favour
-  (~65 points at BTC 81,000). Size does not change this: fees and P&L scale
-  together, so trading smaller or bigger is not a way around it.
-- A position can move the right way and still lose.
+Fees -- Kraken Futures, a new account (tier 1). You trade PF_XBTUSD, the BTC perpetual.
+- TAKER 0.05% per side: a market order (open_position / close_position) buys at the ask
+  and sells at the bid (the spread is usually 1 USD, ~0.12 bps).
+- MAKER 0.02% per side: a limit order (place_order) that rests in the book and is filled
+  later. It fills only when the market trades THROUGH your price -- a trade at exactly
+  your price is not enough -- and maybe never. post_only (default) refuses an order that
+  would fill at once, so you never pay taker by accident.
+- Round trip: taker+taker 10 bps, maker+taker 7 bps, maker+maker 4 bps. To break even a
+  taker round trip needs ~0.10% in your favour (~83 points at 83,000); maker+maker ~0.04%.
+- Funding every hour on open positions: when funding_per_hour > 0 longs pay shorts that
+  fraction of notional, when < 0 shorts pay longs. Small per hour; it adds up over a day.
+- A position can move the right way and still lose. Size does not change the breakeven.
 
 Horizon
 - The holding horizon is the main mechanical lever. Over 30 days of BTC, the
@@ -23,7 +29,8 @@ When big moves come
 
 Direction
 - Across 523 walk-forward trades and 132 held-out trades, no rule, model or Jev
-  pattern tried so far chose the 2-hour direction well enough to pay the fee.
+  pattern tried so far chose the 2-hour direction well enough to pay an 8 bps fee (measured before the switch to
+  Kraken futures fees; 10 bps taker now, 4 bps if both legs rest as maker).
   Momentum lost; one filtered mean-reversion pattern looked good in validation
   and lost 22.5 bps a trade on unseen data. Untried: other horizons, exits other
   than a fixed hold, sizing by the volatility forecast.

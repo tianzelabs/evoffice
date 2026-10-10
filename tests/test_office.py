@@ -45,8 +45,8 @@ def test_events_since_returns_only_newer(office):
 def test_round_trip_through_the_api_is_net_of_fees(office):
     c, m, _ = office
     p = c.post("/positions/open", json={"side": "long", "size": 0.005, "strategy_version": "v1"}, headers=H("t1")).json()
-    assert p["entry_px"] == 80_000.0
-    m.prices["BTC/USD"] = 80_020.0               # moved the right way, by less than the fee
+    assert p["entry_px"] == 80_000.5                 # a market buy pays the ask
+    m.prices["PF_XBTUSD"] = 80_020.0               # moved the right way, by less than the fee
     closed = c.post(f"/positions/{p['id']}/close", headers=H("t1")).json()
     assert closed["close_reason"] == "self" and closed["pnl"] < 0
 
@@ -96,9 +96,9 @@ def test_max_hold_backstop_closes_and_says_why(office):
 def test_leaderboard_lists_idle_traders_and_scores_per_version(office):
     c, m, _ = office
     for version, exit_px in (("v1", 79_900.0), ("v2", 80_300.0)):
-        m.prices["BTC/USD"] = 80_000.0
+        m.prices["PF_XBTUSD"] = 80_000.0
         p = c.post("/positions/open", json={"side": "long", "size": 0.005, "strategy_version": version}, headers=H("t1")).json()
-        m.prices["BTC/USD"] = exit_px
+        m.prices["PF_XBTUSD"] = exit_px
         c.post(f"/positions/{p['id']}/close", headers=H("t1"))
     b = c.get("/leaderboard").json()
     by_emp = {r["employee"]: r for r in b["by_employee"]}

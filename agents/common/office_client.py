@@ -56,6 +56,19 @@ class Office:
     def close_position(self, position_id: int) -> dict:
         return self.post(f"/positions/{int(position_id)}/close")
 
+    def place_order(self, intent: str, price: float, size: float | None = None, side: str | None = None,
+                    position_id: int | None = None, post_only: bool = True, ttl_minutes: int | None = None,
+                    strategy_version: str | None = None) -> dict:
+        return self.post("/orders", {"intent": intent, "price": price, "size": size, "side": side,
+                                     "position_id": position_id, "post_only": post_only, "ttl_minutes": ttl_minutes,
+                                     "strategy_version": strategy_version})
+
+    def cancel_order(self, order_id: int) -> dict:
+        return self.post(f"/orders/{int(order_id)}/cancel")
+
+    def orders(self, employee: str, open_only: bool = False) -> list[dict]:
+        return self.get("/orders", employee=employee, open=str(open_only).lower())
+
     def evaluate(self, code: str, version: str | None = None) -> dict:
         # a held-out run takes ~60 s; at the default 30 s the client gave up while the office
         # finished, recorded the result and spent one of the day's tries (found live)

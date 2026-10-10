@@ -83,15 +83,20 @@ class Runner:
         self.last_trigger_error = None
         self._catch_up_on_chat(1800 if fresh else 0)   # context always; "new" only for a fresh hire
         tools = {
-            "open_position": {"tool": self._open, "description": "open_position(side, size, max_hold_s=None): side 'long'|'short', size in BTC (<= 0.05). Returns the position or {'error': why}"},
-            "close_position": {"tool": self._close, "description": "close_position(position_id): returns the closed position with net pnl, or {'error': why}"},
+            "open_position": {"tool": self._open, "description": "open_position(side, size, max_hold_s=None): a MARKET order -- buys at the ask / sells at the bid, pays the taker fee (0.05%). side 'long'|'short', size in BTC. Returns the position or {'error': why}"},
+            "close_position": {"tool": self._close, "description": "close_position(position_id): a MARKET close (taker). Returns the closed position with net pnl, or {'error': why}"},
+            "place_order": {"tool": self._place, "description": "place_order(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60): a LIMIT order. intent 'open' (with side, size) or 'close' (with position_id). Rests in the book and pays the MAKER fee (0.02%) when the market trades through its price; post_only rejects it if it would fill at once. Price must be a whole USD."},
+            "cancel_order": {"tool": self._cancel, "description": "cancel_order(order_id)"},
             "say": {"tool": self._say, "description": "say(text, to=None): speak in the office chat; everyone sees it"},
             "jev": {"tool": self._jev, "description": "jev(state, questions): Jev typed judgement; questions = {id: {'type': 'noul'|'choice'|'score', 'instructions': str, 'criteria': ...}}"},
-            "fetch_bars": {"tool": self._fetch_bars, "description": "fetch_bars(minutes): up to 7 days of 1-minute BTC/USD bars, oldest first"},
+            "fetch_bars": {"tool": self._fetch_bars, "description": "fetch_bars(minutes): up to 7 days of 1-minute PF_XBTUSD (Kraken BTC perpetual) bars, oldest first"},
             "set_name": {"tool": self._set_name, "description": "set_name(name): choose your own name (shown everywhere instead of your id)"},
-            "evaluate": {"tool": self._evaluate, "description": "evaluate(code): score a strategy on 60 days you cannot see. code must define decide(bars) -> {'side': 'long'|'short'|None, 'hold_minutes': int}; it is called every 15 min with the previous 1440 bars. 5 tries a day; aggregates only"},
+            "evaluate": {"tool": self._evaluate, "description": "evaluate(code): score a strategy on 60 days you cannot see, under the live fee rules. code must define decide(bars) -> {'side': 'long'|'short'|None, 'hold_minutes': int, optional 'entry': 'limit', 'offset_bps': float, 'ttl_minutes': int}; called every 15 min with the previous 1440 bars. 5 tries a day; aggregates only"},
         }
-        self.tool_sigs = {"open_position": "(side, size, max_hold_s=None)", "close_position": "(position_id)",
+        self.tool_sigs = {"open_position": "(side, size, max_hold_s=None) [market, taker]",
+                          "close_position": "(position_id) [market, taker]",
+                          "place_order": "(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60) [limit, maker]",
+                          "cancel_order": "(order_id)",
                           "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)",
                           "evaluate": "(code)", "set_name": "(name)"}
         prologue = (HERE / "prompt.md").read_text() + "\n\n" + (HERE / "mechanics.md").read_text()
@@ -115,6 +120,23 @@ class Runner:
         except Refused as e:
             return {"error": str(e)}
 
+    def _place(self, intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60):
+        try:
+            v, _ = strategy_version(self.ns, mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs)))
+            r = self.office.place_order(intent, float(price), size, side, position_id, bool(post_only), ttl_minutes, v)
+            self._refresh_positions()
+            return r
+        except Refused as e:
+            return {"error": str(e)}
+
+    def _cancel(self, order_id):
+        try:
+            r = self.office.cancel_order(order_id)
+            self._refresh_positions()
+            return r
+        except Refused as e:
+            return {"error": str(e)}
+
     def _close(self, position_id):
         try:
             r = self.office.close_position(position_id)
@@ -128,6 +150,7 @@ class Runner:
         saw positions_open still empty, because facts were written only before the turn."""
         self.ns["positions_open"] = self.office.positions(self.me, open_only=True)
         self.ns["my_closed"] = [p for p in self.office.positions(self.me) if p["closed_ts"]][:30]
+        self.ns["my_orders"] = self.office.orders(self.me, open_only=True)
 
     def _say(self, text, to=None):
         try:
@@ -296,8 +319,9 @@ class Runner:
         self.my_name = next((e.get("name") for e in staff if e["id"] == self.me), None)
         evals = [{"ts": e["ts"][:19], **e["payload"]} for e in self._my_events("evaluation")][-5:]
         facts = {
-            "bars_1m": (list(self.bars), "BTC/USD closed 1-minute bars, oldest first; keys m (UTC minute), o, h, l, c, v", bar_note),
-            "price_now": (px, "last trade price and its age in seconds", ""),
+            "bars_1m": (list(self.bars), "PF_XBTUSD (Kraken BTC perpetual) closed 1-minute bars, oldest first; keys m (UTC minute), o, h, l, c, v", bar_note),
+            "price_now": (px, "PF_XBTUSD quote: last, bid, ask, mark, funding_per_hour (longs pay it when > 0), fees", ""),
+            "my_orders": (self.office.orders(self.me, open_only=True), "your resting limit orders", ""),
             "positions_open": (open_pos, "your open positions", ""),
             "my_closed": (closed, "your last 30 closed positions, newest first; pnl is net of both fees", ""),
             "chat_new": (list(self.chat_new), "chat messages since your last turn", f"{len(self.chat_new)} new"),

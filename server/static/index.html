@@ -39,7 +39,7 @@
 <body>
 <header>
   <h1>Pixel Office</h1>
-  <span>BTC/USD <span id="price">…</span></span>
+  <span>PF_XBTUSD <span id="price">…</span></span>
   <span class="muted" id="states"></span>
   <span class="muted" id="budget"></span>
   <span class="muted" id="me">not signed in</span>
@@ -85,6 +85,7 @@ function line(ev) {
     case "command": return `<span class="sys">${a} set ${esc(p.employee)}: ${esc(JSON.stringify(p.changes))}${p.reason ? " — " + esc(p.reason) : ""}</span>`;
     case "fire": return `<span class="sys">${a} FIRED ${esc(p.employee)} → ${esc(p.successor)} takes the seat — ${esc(p.reason)}</span>`;
     case "evaluation": return `<span class="sys">${a} evaluated a strategy on held-out data: ${p.trades ?? 0} trades, ${p.net_bps_per_trade ?? "–"} bps/trade ${p.ci95_net_bps_per_trade ? "[" + p.ci95_net_bps_per_trade.join(", ") + "]" : ""}</span>`;
+    case "order": return `<span class="sys">${a} limit ${p.side} ${p.size} @ ${p.price}: ${esc(p.status)}${p.liquidity ? " (" + p.liquidity + ")" : ""}</span>`;
     case "agent_state": return p.state === "asleep" ? `<span class="sys">${a} is asleep: ${esc(p.why || "")}</span>` : null;
     case "spend": case "turn": return null;
     default: return `<span class="sys">${a} ${esc(ev.kind)} ${esc(JSON.stringify(p))}</span>`;

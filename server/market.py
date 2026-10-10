@@ -1,12 +1,14 @@
-"""Prices from agent-world's ClickHouse feed -- read-only, never fabricated.
+"""Market data for the office: Kraken Futures PF_XBTUSD, read-only, never fabricated.
 
-Carried in spirit from agent-world `village/market.py`, rewritten because that
-file's docstring promised `None` on a gap while the code raised, and its replay
-fake had dead code. One rule here, enforced rather than documented:
+The user develops the agents on what a new Kraken futures account would really
+get, so prices are the perpetual's own (agent-world/ingestion/futures_capture.py
+and futures_backfill.py fill these tables): best bid/ask for fills, the trade
+stream for limit-order fills, Kraken's own 1-minute candles for history, its
+published hourly funding.
 
-**A price is the last trade, and only if it is fresh.** If the newest trade is
-older than the tolerance, the feed has a gap, and a gap is not a price: the
-answer is `Stale`, and the caller refuses to fill rather than fill at an old print.
+One rule, enforced rather than documented: **a quote is only a quote if it is
+fresh.** Older than FRESH_S, the feed has a gap; the answer is `Stale` and the
+caller refuses to fill rather than fill at an old print.
 """
 from __future__ import annotations
 
@@ -15,27 +17,34 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 
-FRESH_S = 15.0   # BTC/USD trades continuously; older than this is a feed gap
+FRESH_S = 15.0
+PRODUCT = "PF_XBTUSD"
+PAIRS = (PRODUCT,)
+MAX_BARS_MINUTES = 7 * 24 * 60
 
 
 class Stale(Exception):
-    """No trade within the freshness tolerance. Refuse; do not guess."""
+    """No fresh quote. Refuse; do not guess."""
 
 
 @dataclass(frozen=True)
 class Quote:
     pair: str
-    price: float
+    price: float          # last trade
     age_s: float
+    bid: float = 0.0
+    ask: float = 0.0
+    mark: float = 0.0
+    funding_per_hour: float = 0.0   # relative funding rate: fraction of notional, longs pay when positive
 
 
-PAIRS = ("BTC/USD", "ETH/USD", "SOL/USD")
-MAX_BARS_MINUTES = 7 * 24 * 60
+def _check(pair: str):
+    if pair not in PAIRS:
+        raise ValueError(f"unknown pair {pair!r}; the office trades {PRODUCT} (Kraken BTC perpetual)")
 
 
-class ClickHouseMarket:
-    """Shells out to clickhouse-client, as the rest of agent-world does, rather
-    than taking a driver dependency for a few small reads."""
+class FuturesMarket:
+    """Shells out to clickhouse-client, as agent-world's ingestion does."""
 
     def __init__(self, database: str = "traderme", timeout: int = 20):
         self.database, self.timeout = database, timeout
@@ -49,52 +58,83 @@ class ClickHouseMarket:
             raise Stale(f"clickhouse-client failed: {(r.stderr or '').strip()[:200]}")
         return r.stdout.strip()
 
+    def quote(self, pair: str = PRODUCT) -> Quote:
+        _check(pair)
+        out = self._query(
+            f"SELECT bid, ask, last, mark, relative_funding_rate, dateDiff('millisecond', ts, now64(3)) / 1000.0 "
+            f"FROM {self.database}.futures_ticker WHERE product = '{pair}' ORDER BY ts DESC LIMIT 1 FORMAT TSV")
+        if not out:
+            raise Stale(f"no ticker for {pair}")
+        bid, ask, last, mark, funding, age = map(float, out.split("\t"))
+        if age > FRESH_S or bid <= 0 or ask <= 0:
+            raise Stale(f"{pair}: newest bid/ask is {age:.1f}s old (tolerance {FRESH_S}s)")
+        return Quote(pair, last, max(0.0, age), bid, ask, mark, funding)
+
     def bars(self, pair: str, minutes: int) -> list[dict]:
-        """Closed 1-minute bars, oldest first. Minutes with no trade are absent, not filled.
-        Capped at 7 days: what lies further back is the held-out window (server/evaluator)."""
+        """Closed 1-minute bars, oldest first. Capped at 7 days: what lies further back is the
+        held-out window (server/evaluator)."""
         return self.bars_between(pair, max(1, min(int(minutes), MAX_BARS_MINUTES)), 0)
 
     def bars_between(self, pair: str, from_minutes_ago: int, to_minutes_ago: int) -> list[dict]:
-        """For the office's own use (the evaluator). Never exposed as a route."""
-        if pair not in PAIRS:
-            raise ValueError(f"unknown pair {pair!r}")
+        """Kraken's own candles, and for the minutes after the newest candle, bars built from
+        the captured trade stream. Minutes with no trade are absent, not filled."""
+        _check(pair)
         a, b = int(from_minutes_ago), int(to_minutes_ago)
-        sql = (f"SELECT toString(toStartOfMinute(ts)), argMin(price, ts), max(price), min(price), argMax(price, ts), "
-               f"round(sum(qty), 6) FROM {self.database}.trades WHERE pair = '{pair}' "
-               f"AND ts >= toStartOfMinute(now()) - INTERVAL {a} MINUTE AND ts < toStartOfMinute(now()) - INTERVAL {b} MINUTE "
-               f"GROUP BY toStartOfMinute(ts) ORDER BY toStartOfMinute(ts) FORMAT TSV")
-        out = self._query(sql)
-        rows = []
-        for line in out.splitlines():
+        lo = f"toStartOfMinute(now()) - INTERVAL {a} MINUTE"
+        hi = f"toStartOfMinute(now()) - INTERVAL {b} MINUTE"
+        sql = (
+            f"SELECT toString(ts), open, high, low, close, volume FROM {self.database}.futures_candles_1m FINAL "
+            f"WHERE product = '{pair}' AND ts >= {lo} AND ts < {hi} AND volume > 0 "
+            f"UNION ALL "
+            f"SELECT toString(toStartOfMinute(ts)) AS m, argMin(price, ts), max(price), min(price), argMax(price, ts), "
+            f"round(sum(qty), 6) FROM {self.database}.futures_trades "
+            f"WHERE product = '{pair}' AND ts >= {lo} AND ts < {hi} AND ts >= "
+            f"(SELECT max(ts) + INTERVAL 1 MINUTE FROM {self.database}.futures_candles_1m WHERE product = '{pair}') "
+            f"GROUP BY m FORMAT TSV")
+        rows = {}
+        for line in self._query(sql).splitlines():
             m, o, h, l, c, v = line.split("\t")
-            rows.append({"m": m, "o": float(o), "h": float(h), "l": float(l), "c": float(c), "v": float(v)})
-        return rows
+            rows[m[:19]] = {"m": m[:19], "o": float(o), "h": float(h), "l": float(l), "c": float(c), "v": float(v)}
+        return [rows[k] for k in sorted(rows)]
 
-    def quote(self, pair: str) -> Quote:
-        if pair not in PAIRS:
-            raise ValueError(f"unknown pair {pair!r}")   # pairs are ours; never interpolate input
-        sql = (f"SELECT price, dateDiff('millisecond', ts, now64(6)) / 1000.0 "
-               f"FROM {self.database}.trades WHERE pair = '{pair}' ORDER BY ts DESC LIMIT 1 FORMAT TSV")
-        out = self._query(sql)
-        if not out:
-            raise Stale(f"no trades for {pair}")
-        price_s, age_s = out.split("\t")
-        q = Quote(pair, float(price_s), max(0.0, float(age_s)))
-        if q.age_s > FRESH_S:
-            raise Stale(f"{pair}: newest trade is {q.age_s:.1f}s old (tolerance {FRESH_S}s)")
-        return q
+    def trades_since(self, pair: str, since_epoch: float) -> list[tuple[float, float]]:
+        """(epoch seconds, price) of every trade after `since_epoch`, oldest first -- for limit fills."""
+        _check(pair)
+        out = self._query(
+            f"SELECT toUnixTimestamp64Milli(ts) / 1000.0, price FROM {self.database}.futures_trades "
+            f"WHERE product = '{pair}' AND ts > fromUnixTimestamp64Milli(toInt64({since_epoch * 1000:.0f})) "
+            f"ORDER BY ts LIMIT 100000 FORMAT TSV")
+        return [tuple(map(float, l.split("\t"))) for l in out.splitlines()]
+
+    def funding_history(self, pair: str, from_epoch: float, to_epoch: float) -> dict[int, float]:
+        """{hour start epoch: relative funding rate} as Kraken published it."""
+        _check(pair)
+        out = self._query(
+            f"SELECT toUnixTimestamp(ts), relative_funding_rate FROM {self.database}.futures_funding FINAL "
+            f"WHERE product = '{pair}' AND ts >= toDateTime({int(from_epoch)}) AND ts < toDateTime({int(to_epoch)}) FORMAT TSV")
+        return {int(t): float(r) for t, r in (l.split("\t") for l in out.splitlines())}
 
 
 @dataclass
 class FakeMarket:
-    """Deterministic market for tests: set the price, or make the feed stale."""
-    prices: dict[str, float] = field(default_factory=lambda: {"BTC/USD": 80_000.0})
+    """Deterministic market for tests: a mid price, a spread, a trade tape you append to."""
+    prices: dict[str, float] = field(default_factory=lambda: {PRODUCT: 80_000.0})
+    spread: float = 1.0
     stale: bool = False
+    funding: float = 0.0
+    tape: list[tuple[float, float]] = field(default_factory=list)
 
-    def quote(self, pair: str) -> Quote:
+    def quote(self, pair: str = PRODUCT) -> Quote:
         if self.stale or pair not in self.prices:
             raise Stale(f"{pair}: feed stale (fake)")
-        return Quote(pair, self.prices[pair], 0.0)
+        p = self.prices[pair]
+        return Quote(pair, p, 0.0, p - self.spread / 2, p + self.spread / 2, p, self.funding)
+
+    def trade(self, price: float, at: float | None = None):
+        self.tape.append((at if at is not None else time.time(), price))
+
+    def trades_since(self, pair: str, since_epoch: float) -> list[tuple[float, float]]:
+        return [t for t in self.tape if t[0] > since_epoch]
 
     def bars_between(self, pair: str, from_minutes_ago: int, to_minutes_ago: int) -> list[dict]:
         return self.bars(pair, from_minutes_ago - to_minutes_ago)
@@ -102,3 +142,6 @@ class FakeMarket:
     def bars(self, pair: str, minutes: int) -> list[dict]:
         p = self.prices.get(pair, 0.0)
         return [{"m": f"2026-01-01 00:{i % 60:02d}:00", "o": p, "h": p, "l": p, "c": p, "v": 1.0} for i in range(minutes)]
+
+    def funding_history(self, pair: str, from_epoch: float, to_epoch: float) -> dict[int, float]:
+        return {}

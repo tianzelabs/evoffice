@@ -1,44 +1,84 @@
 """Walk a strategy forward over bars it has never seen -- pure, no I/O.
 
-The trader's `decide(bars)` is called every STEP minutes with the WINDOW bars
-before that moment (never a bar after it), and returns
-{"side": "long" | "short" | None, "hold_minutes": int}. A position is entered
-at the last close it saw, exited HOLD minutes later, and charged both fees with
-the same arithmetic as live settlement. Positions do not overlap.
+Kraken Futures rules, the same as the live office (server/fees.py): a market
+entry or exit pays the TAKER fee and half the spread; an entry may instead rest
+as a limit order and pay the MAKER fee -- but only if a later bar trades THROUGH
+its price (low strictly below a buy, high strictly above a sell) before it
+expires. Hourly funding at Kraken's published rate is charged on every hour
+boundary the position spans.
 
-Only aggregates leave the evaluator. Per-trade detail would let a trader probe
-the held-out window until it had reconstructed it -- which would make it data
-it has seen, the exact thing this exists to prevent (spike 4).
+The trader's `decide(bars)` sees only the WINDOW bars before now and returns
+  {"side": "long"|"short"|None, "hold_minutes": int,
+   optional "entry": "limit", "offset_bps": float, "ttl_minutes": int}
+Positions do not overlap. Only aggregates leave the evaluator: per-trade detail
+would let a trader probe the held-out window until it had reconstructed it.
 """
 from __future__ import annotations
 
 import random
 import statistics
+from datetime import datetime, timezone
 
 from server.settlement import settle
 
-STEP, WINDOW, MAX_HOLD = 15, 1440, 1440
+STEP, WINDOW, MAX_HOLD, MAX_TTL = 15, 1440, 1440, 240
+HALF_SPREAD = 0.5          # PF_XBTUSD trades at a 1 USD spread almost always
 
 
-def simulate(bars: list[dict], decide, step: int = STEP, window: int = WINDOW) -> dict:
-    pnl_bps, errors, i = [], 0, window
+def _epoch(m: str) -> int:
+    return int(datetime.fromisoformat(m).replace(tzinfo=timezone.utc).timestamp())
+
+
+def _funding(side: str, entry_px: float, t0: int, t1: int, rates: dict[int, float]) -> float:
+    total, h = 0.0, (t0 // 3600 + 1) * 3600
+    while h <= t1:
+        r = rates.get(h, 0.0)
+        total += (-r if side == "long" else r) * entry_px
+        h += 3600
+    return total
+
+
+def simulate(bars: list[dict], decide, funding: dict[int, float] | None = None, step: int = STEP,
+             window: int = WINDOW) -> dict:
+    funding = funding or {}
+    pnl_bps, errors, makers, unfilled, i = [], 0, 0, 0, window
     first_error = None
     while i < len(bars):
         try:
             d = decide(bars[i - window:i]) or {}
-            side = d.get("side")
-            hold = int(d.get("hold_minutes", 0))
+            side, hold = d.get("side"), int(d.get("hold_minutes", 0))
+            limit = d.get("entry") == "limit"
+            offset, ttl = float(d.get("offset_bps", 0)), max(1, min(int(d.get("ttl_minutes", 60)), MAX_TTL))
         except Exception as e:                    # a crash is a decision not to trade, and is counted
             errors += 1
             first_error = first_error or f"{type(e).__name__}: {str(e)[:200]}"
-            side, hold = None, 0
-        if side in ("long", "short") and 1 <= hold <= MAX_HOLD and i - 1 + hold < len(bars):
-            entry, exit_ = bars[i - 1]["c"], bars[i - 1 + hold]["c"]
-            pnl_bps.append(settle(side, 1.0, entry, exit_).pnl_bps)
-            i += max(hold, step)
-        else:
+            side, hold, limit = None, 0, False
+        if side not in ("long", "short") or not 1 <= hold <= MAX_HOLD:
             i += step
-    return {"pnl_bps": pnl_bps, "decide_errors": errors, "first_error": first_error}
+            continue
+        ref = bars[i - 1]["c"]
+        if limit:
+            px = round(ref * (1 - offset / 1e4)) if side == "long" else round(ref * (1 + offset / 1e4))
+            j = next((k for k in range(i, min(i + ttl, len(bars)))
+                      if (bars[k]["l"] < px if side == "long" else bars[k]["h"] > px)), None)
+            if j is None:
+                unfilled += 1
+                i += max(ttl, step)
+                continue
+            entry, entry_liq, start = float(px), "maker", j
+            makers += 1
+        else:
+            entry = ref + HALF_SPREAD if side == "long" else ref - HALF_SPREAD
+            entry_liq, start = "taker", i - 1
+        end = start + hold
+        if end >= len(bars):
+            break
+        exit_ = bars[end]["c"] - HALF_SPREAD if side == "long" else bars[end]["c"] + HALF_SPREAD
+        fund = _funding(side, entry, _epoch(bars[start]["m"]), _epoch(bars[end]["m"]), funding)
+        pnl_bps.append(settle(side, 1.0, entry, exit_, entry_liq, "taker", fund).pnl_bps)
+        i = end + 1
+    return {"pnl_bps": pnl_bps, "decide_errors": errors, "first_error": first_error,
+            "maker_entries": makers, "unfilled_limit_entries": unfilled}
 
 
 def aggregate(pnl_bps: list[float], seed: int = 0) -> dict:

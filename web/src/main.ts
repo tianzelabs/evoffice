@@ -33,7 +33,7 @@ async function board() { try { scene.setBoard(await refreshBoard()); } catch { /
 async function market() {
   try {
     const [p, bars] = await Promise.all([getJSON("/price"), getJSON("/bars?minutes=90")]);
-    setPrice(`BTC ${p.price.toFixed(1)}`);
+    setPrice(`BTC-PERP ${p.bid.toFixed(0)}/${p.ask.toFixed(0)} · funding ${(p.funding_per_hour * 1e4).toFixed(3)} bp/h`);
     scene.setChart(bars, p.price);
   } catch { setPrice("BTC feed stale"); }
 }

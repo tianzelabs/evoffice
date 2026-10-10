@@ -23,10 +23,10 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import iterations, leaderboard, names, positions, progress, scheduler, seasons, staff
+from . import broker, fees, iterations, leaderboard, names, orders, positions, progress, scheduler, seasons, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
-from .market import ClickHouseMarket, Stale
+from .market import PRODUCT, FuturesMarket, Stale
 from .store import Store
 
 STATIC = Path(__file__).with_name("static")
@@ -67,10 +67,21 @@ class Evaluate(BaseModel):
     version: str | None = None
 
 
+class Order(BaseModel):
+    intent: str                       # "open" | "close"
+    price: float
+    size: float | None = None         # for intent = open
+    side: str | None = None           # "long" | "short", for intent = open
+    position_id: int | None = None    # for intent = close
+    post_only: bool = True
+    ttl_minutes: int | None = None
+    strategy_version: str | None = None
+
+
 class Open(BaseModel):
     side: str
     size: float
-    pair: str = "BTC/USD"
+    pair: str = PRODUCT
     strategy_version: str | None = None
     max_hold_s: int | None = Field(default=None, gt=0)
 
@@ -89,10 +100,14 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
                 await asyncio.sleep(backstop_every_s)
                 await run_in_threadpool(positions.enforce_max_hold, store, market)
                 await run_in_threadpool(scheduler.tick, store, market)      # stand-up and market alerts
-        task = asyncio.create_task(backstop()) if backstop_every_s > 0 else None
+        async def matcher():
+            while True:                    # resting limit orders: filled when the market trades through them
+                await asyncio.sleep(2)
+                await run_in_threadpool(orders.match, store, market)
+        tasks = [asyncio.create_task(backstop()), asyncio.create_task(matcher())] if backstop_every_s > 0 else []
         yield
-        if task:
-            task.cancel()
+        for t in tasks:
+            t.cancel()
 
     app = FastAPI(title="pixel-office", lifespan=lifespan)
 
@@ -148,12 +163,34 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         return store.emit(w["id"], "say", {"text": body.text, "to": body.to, "role": w["role"]})
 
     @app.get("/price")
-    async def price(pair: str = "BTC/USD"):
+    async def price(pair: str = PRODUCT):
         try:
             q = await run_in_threadpool(market.quote, pair)
         except (Stale, ValueError) as e:
             raise HTTPException(503, str(e))
-        return {"pair": q.pair, "price": q.price, "age_s": round(q.age_s, 2)}
+        return {"pair": q.pair, "price": q.price, "bid": q.bid, "ask": q.ask, "mark": q.mark,
+                "funding_per_hour": q.funding_per_hour, "age_s": round(q.age_s, 2),
+                "fees": {"regime": fees.REGIME, "maker": fees.MAKER, "taker": fees.TAKER}}
+
+    @app.post("/orders")
+    async def place_order(body: Order, w: dict = Depends(who)):
+        try:
+            return await run_in_threadpool(orders.place, store, market, w, body.intent, body.size, body.price,
+                                           body.side, body.position_id, body.post_only, body.ttl_minutes,
+                                           body.strategy_version)
+        except orders.OrderRefused as e:
+            raise HTTPException(409, str(e))
+
+    @app.post("/orders/{order_id}/cancel")
+    def cancel_order(order_id: int, w: dict = Depends(who)):
+        try:
+            return orders.cancel(store, w, order_id)
+        except orders.OrderRefused as e:
+            raise HTTPException(409, str(e))
+
+    @app.get("/orders")
+    def list_orders(employee: str | None = None, open: bool = False):
+        return orders.listing(store, employee, open)
 
     @app.post("/positions/open")
     async def open_(body: Open, w: dict = Depends(who)):
@@ -178,6 +215,11 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     def board():
         return leaderboard.standings(store)
 
+    @app.get("/golive/{employee_id}")
+    def golive(employee_id: str):
+        """Read-only: has this trader earned a real Kraken account? The switch itself is the user's."""
+        return broker.checklist(store, employee_id)
+
     @app.get("/season")
     def season():
         """This week's standings, when it ends, and every trophy handed out so far."""
@@ -194,7 +236,7 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         return iterations.timeline(store)
 
     @app.get("/bars")
-    async def bars(minutes: int = 60, pair: str = "BTC/USD"):
+    async def bars(minutes: int = 60, pair: str = PRODUCT):
         try:
             return await run_in_threadpool(market.bars, pair, minutes)
         except (Stale, ValueError) as e:
@@ -278,7 +320,7 @@ def _from_env() -> FastAPI:
     db = os.path.expanduser(os.environ.get("OFFICE_DB", "~/pixel-office/office.db"))
     os.makedirs(os.path.dirname(db), exist_ok=True)
     tokens_path = Path(os.path.expanduser(os.environ.get("OFFICE_TOKENS", "~/pixel-office/tokens.json")))
-    return create_app(Store(db), ClickHouseMarket(), json.loads(tokens_path.read_text()), tokens_path=tokens_path)
+    return create_app(Store(db), FuturesMarket(), json.loads(tokens_path.read_text()), tokens_path=tokens_path)
 
 
 app = _from_env() if os.environ.get("OFFICE_DB") or os.environ.get("OFFICE_TOKENS") else None
