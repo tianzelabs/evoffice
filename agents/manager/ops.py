@@ -165,6 +165,10 @@ def backtest(office: Office, code: str, data: str = "train", days: float = 30) -
     return json.dumps(_safe(lambda: office.backtest(code, data, days)), ensure_ascii=False)
 
 
+def context(office: Office, minutes: int) -> str:
+    return json.dumps(_safe(lambda: office.context(minutes)))
+
+
 def golive(office: Office, trader: str) -> str:
     return json.dumps(_safe(lambda: office.get(f"/golive/{trader}")), ensure_ascii=False)
 

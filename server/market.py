@@ -97,6 +97,41 @@ class FuturesMarket:
             rows[m[:19]] = {"m": m[:19], "o": float(o), "h": float(h), "l": float(l), "c": float(c), "v": float(v)}
         return [rows[k] for k in sorted(rows)]
 
+    def context(self, pair: str, minutes: int) -> list[dict]:
+        """The market's state minute by minute, for studying what came BEFORE a move (2026-10-10):
+        the bar, plus -- from the captured streams, so only since capture began (2026-10-10 09:00 UTC)
+        -- taker buy/sell volume (Kraken's trade `side` is the taker's), trade count and largest
+        trade, mean spread and top-of-book size imbalance, basis (mark vs index), the funding rate
+        and open interest (from 18:00 UTC). Capped at 7 days like /bars: older is held-out."""
+        _check(pair)
+        n = max(1, min(int(minutes), MAX_BARS_MINUTES))
+        rows = {b["m"]: dict(b) for b in self.bars_between(pair, n, 0)}
+        lo = f"toStartOfMinute(now()) - INTERVAL {n} MINUTE"
+        hi = "toStartOfMinute(now())"
+        tr = self._query(
+            f"SELECT toString(toStartOfMinute(ts)) AS m, round(sumIf(qty, side = 'buy'), 6), "
+            f"round(sumIf(qty, side = 'sell'), 6), count(), max(qty) FROM {self.database}.futures_trades "
+            f"WHERE product = '{pair}' AND ts >= {lo} AND ts < {hi} GROUP BY m FORMAT TSV")
+        for line in tr.splitlines():
+            m, b, s, c, mx = line.split("\t")
+            if m[:19] in rows:
+                b, s = float(b), float(s)
+                rows[m[:19]].update({"taker_buy": b, "taker_sell": s, "flow_imb": round((b - s) / (b + s), 3) if b + s else 0.0,
+                                     "trades": int(c), "max_trade": float(mx)})
+        tk = self._query(
+            f"SELECT toString(toStartOfMinute(ts)) AS m, round(avg(ask - bid), 3), "
+            f"round(avg((bid_size - ask_size) / nullIf(bid_size + ask_size, 0)), 3), "
+            f"round(avg((mark - index_price) / nullIf(index_price, 0) * 10000), 3), argMax(relative_funding_rate, ts), "
+            f"argMax(open_interest, ts) FROM {self.database}.futures_ticker "
+            f"WHERE product = '{pair}' AND ts >= {lo} AND ts < {hi} GROUP BY m FORMAT TSV")
+        for line in tk.splitlines():
+            m, spr, imb, basis, fr, oi = line.split("\t")
+            if m[:19] in rows:
+                num = lambda x: None if x in ("\\N", "nan", "") else float(x)
+                rows[m[:19]].update({"spread": num(spr), "book_imb": num(imb), "basis_bps": num(basis),
+                                     "funding_per_hour": num(fr), "open_interest": (num(oi) or None)})
+        return [rows[k] for k in sorted(rows)]
+
     def trades_since(self, pair: str, since_epoch: float) -> list[tuple[float, float]]:
         """(epoch seconds, price) of every trade after `since_epoch`, oldest first -- for limit fills."""
         _check(pair)
@@ -138,6 +173,9 @@ class FakeMarket:
 
     def bars_between(self, pair: str, from_minutes_ago: int, to_minutes_ago: int) -> list[dict]:
         return self.bars(pair, from_minutes_ago - to_minutes_ago)
+
+    def context(self, pair: str, minutes: int) -> list[dict]:
+        return [{**b, "taker_buy": 0.0, "taker_sell": 0.0, "flow_imb": 0.0, "trades": 0} for b in self.bars(pair, minutes)]
 
     def bars(self, pair: str, minutes: int) -> list[dict]:
         p = self.prices.get(pair, 0.0)

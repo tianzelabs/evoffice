@@ -41,6 +41,7 @@ function line(e: OfficeEvent): string | null {
     case "task_result": return `<span class="sys">${a} task #${p.task} ${p.error ? `<span class="neg">failed: ${esc(p.error)}</span>` : "done"}${p.summary ? ": " + esc(String(p.summary).slice(0, 600)) : ""}</span>`;
     case "repl": return `<span class="sys">${a} ran ${p.lines} lines in the shared REPL</span>`;
     case "repl_result": return p.stderr && p.stderr.trim() ? `<span class="sys neg">shared REPL error (${esc(String(p.by ?? ""))}): ${esc(String(p.stderr).slice(-200))}</span>` : null;
+    case "review": return `<span class="sys">— ${p.daily ? "end-of-day review" : "lookback review"}: what did we miss, and what came before it? —</span>`;
     case "trigger": return `<span class="sys">⚡ ${a} trigger: ${esc(p.text ?? "")}</span>`;
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
     case "wake": return `<span class="sys">${a} woke: ${esc((p.reasons || []).join("; "))}</span>`;

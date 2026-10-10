@@ -149,3 +149,21 @@ def test_the_shared_repl_takes_code_from_the_manager_and_returns_output(office):
     assert c.get(f"/repl/{r['id']}").json()["status"] == "pending"
     c.post("/report", json={"kind": "repl_result", "payload": {"req": r["id"], "stdout": "2\n", "stderr": ""}}, headers=H("t1"))
     assert c.get(f"/repl/{r['id']}").json()["stdout"] == "2\n"
+
+
+def test_lookback_reviews_run_at_office_times_once_each(office):
+    from datetime import datetime, timezone
+    from server import scheduler
+    _, _, store = office
+    t = datetime(2026, 10, 10, 10, 2, tzinfo=timezone.utc)          # 12:02 Budapest (CEST)
+    assert scheduler.review_tick(store, t)["daily"] is False
+    assert scheduler.review_tick(store, t.replace(minute=5)) is None              # once
+    assert scheduler.review_tick(store, t.replace(hour=11)) is None               # not a review time
+    d = scheduler.review_tick(store, datetime(2026, 10, 10, 21, 31, tzinfo=timezone.utc))   # 23:31
+    assert d["daily"] is True and d["since"].startswith("2026-10-10T10:02")
+
+
+def test_market_context_is_served(office):
+    c, _, _ = office
+    rows = c.get("/market/context?minutes=5").json()
+    assert len(rows) == 5 and {"flow_imb", "taker_buy", "trades"} <= set(rows[0])

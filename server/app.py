@@ -263,6 +263,14 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         except (Stale, ValueError) as e:
             raise HTTPException(503, str(e))
 
+    @app.get("/market/context")
+    async def market_context(minutes: int = 120, pair: str = PRODUCT):
+        """Minute-by-minute market state: bar, taker flow, book, basis, funding, open interest."""
+        try:
+            return await run_in_threadpool(market.context, pair, minutes)
+        except (Stale, ValueError) as e:
+            raise HTTPException(503, str(e))
+
     @app.post("/report")
     def report(body: Report, w: dict = Depends(who)):
         """An agent reporting on itself (woke, new strategy version, what it is doing). Never about others."""

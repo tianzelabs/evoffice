@@ -20,6 +20,10 @@ from .market import Stale
 from .store import Store
 
 MEETING_UTC = os.environ.get("OFFICE_MEETING_UTC", "07:30")
+# The boss's method (2026-10-10): trade normally, and every so often look BACK at the moves we missed and
+# what the market looked like before them. Local office time (Europe/Budapest); the last one is the day's.
+REVIEW_TZ = os.environ.get("OFFICE_TZ", "Europe/Budapest")
+REVIEW_TIMES = os.environ.get("OFFICE_REVIEW_TIMES", "12:00,16:00,20:00,23:30")
 MEETING_MINUTES = 20
 ALERT_MOVE_5M_BPS = 40.0
 ALERT_RANGE_1M_BPS = 30.0
@@ -52,6 +56,30 @@ def meeting_tick(store: Store, now: datetime) -> str | None:
     return None
 
 
+def review_tick(store: Store, now: datetime) -> dict | None:
+    from zoneinfo import ZoneInfo
+    local = now.astimezone(ZoneInfo(REVIEW_TZ))
+    times = [t.strip() for t in REVIEW_TIMES.split(",") if t.strip()]
+    last = _last(store, "review")
+    for i, t in enumerate(times):
+        hh, mm = map(int, t.split(":"))
+        at = local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if not at <= local < at + timedelta(minutes=10):
+            continue
+        if last and last["ts"] >= at.astimezone(timezone.utc):
+            return None
+        since = last["ts"].isoformat() if last else (at - timedelta(hours=4)).astimezone(timezone.utc).isoformat()
+        daily = i == len(times) - 1
+        p = {"since": since, "until": now.isoformat(), "daily": daily, "at": now.isoformat(),
+             "agenda": ("END-OF-DAY review of the whole day" if daily else "lookback review since the last one")
+                       + ": find the moves we missed (and the trades that went wrong), describe the market state "
+                         "BEFORE each with market_context, compare it with ordinary times, add them to the "
+                         "opportunity journal in the shared REPL, and turn what recurs into hypotheses to test"}
+        store.emit("office", "review", p)
+        return p
+    return None
+
+
 def alert_tick(store: Store, market, now: datetime) -> dict | None:
     last = _last(store, "alert")
     if last and now - last["ts"] < ALERT_COOLDOWN:
@@ -78,6 +106,7 @@ def tick(store: Store, market, now: datetime | None = None) -> None:
     from . import funding, seasons
     now = now or datetime.now(timezone.utc)
     meeting_tick(store, now)
+    review_tick(store, now)
     seasons.tick(store, now)
     if now.minute < 10:                   # funding settles on the hour; apply it once, early in the hour
         funding.apply(store, market, now)

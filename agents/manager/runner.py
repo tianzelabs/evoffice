@@ -49,7 +49,7 @@ QUIET = {"agent_state", "spend", "backtest"}     # backtests are counted in the 
 # what wakes the manager besides the boss and messages to it; only when tokens are free
 # The trader only acts on the manager's tasks now, so its versions/evaluations no longer wake the manager
 # (it caused them). What does: the trader's should_wake trigger, a backstop close, the boss, meetings, alerts.
-TRADER_NEWS = {"trigger", "close", "fire", "say", "meeting", "alert"} if BACKEND == "codex" else {"meeting"}
+TRADER_NEWS = {"trigger", "close", "fire", "say", "meeting", "alert", "review"} if BACKEND == "codex" else {"meeting"}
 
 CODEX_DUTIES = """
 YOUR OBJECTIVE, set by the boss: TURN THE MINUS INTO A PLUS. Every number so far is
@@ -112,6 +112,24 @@ whether each change helped -- ideas tested per day, live trades, held-out result
 and whether anything starts to pay after fees (10 bps taker round trip, 4 bps
 maker/maker). Not how carefully one idea was audited: do not spend tasks on process
 proofs, timestamp reconciliations or control tests.
+
+LOOKBACK REVIEWS (a `review` event; 12:00, 16:00, 20:00 and the day's at 23:30 Budapest) --
+the boss's method: trade normally, then look BACK at what we missed and what the market
+looked like before it. Each review:
+  1. Find the moves since the last review that would have paid after fees, and our live
+     trades that went wrong.
+  2. For each, describe the market state BEFORE it with market_context() in the shared
+     REPL (`office context N` from your shell): taker flow and its imbalance, trade count
+     and size, spread, top-of-book imbalance, basis, funding, open interest, volatility,
+     time of day -- and what our rules did or failed to do.
+  3. Append every case to `opportunity_journal` (a list of dicts) in the shared REPL; never
+     rewrite past entries.
+  4. Compare with ORDINARY times: a condition that precedes missed moves is a signal only
+     if it is rarer the rest of the time. Count base rates; without them every
+     coincidence looks like a pattern.
+  5. Turn what recurs across reviews (not one day) into hypotheses, backtest them, and say
+     in the chat in a few lines what was missed, what preceded it, and what you will test.
+The day's review also says how the journal changed the rules.
 
 THE DAILY STAND-UP (a `meeting` event): give the boss, in the chat, 3-5 lines: what the
 market is doing, what you tested and what it showed, what is live, what is next.
