@@ -32,8 +32,11 @@ what you defined or changed, what you placed or closed, and anything that went w
 concise, exact, nothing invented. Then set answer["ready"] = True.
 
 Rules of the office (enforced by the office, not by you):
-- Positions: PF_XBTUSD only, size capped by your level. A backstop closes anything held
-  too long. Market orders fill at the ask/bid; limit orders fill only when traded through.
+- ONE NET POSITION, as on Kraken: buying while short reduces or closes the short (and
+  flips you long with whatever is left); buying while long adds to it at an average
+  entry. You can never be long and short at once. The size cap (your level) applies to
+  the net position plus resting orders that would add to it. A backstop closes anything
+  held too long. Market orders fill at the ask/bid; limit orders fill only when traded through.
 - Fees per side: 0.05% taker (market), 0.02% maker (resting limit). Funding hourly.
 - You have a daily model budget; when it is spent, you sleep until tomorrow.
 - Office hours are 08:00-24:00 Budapest time.

@@ -73,8 +73,11 @@ def place(store: Store, market, who: dict, intent: str, size: float | None, pric
     if intent == "open":
         if side not in ("long", "short"):
             raise OrderRefused("an opening order needs side 'long' or 'short'")
+        same = "buy" if side == "long" else "sell"
+        pending = store.q("SELECT COALESCE(SUM(size), 0) AS s FROM orders WHERE employee_id = ? AND status = 'open' "
+                          "AND intent = 'open' AND side = ?", (who["id"], same))[0]["s"]
         try:
-            positions.check_open(store, who["id"], PRODUCT, side, float(size or 0))
+            positions.check_open(store, who["id"], PRODUCT, side, float(size or 0), pending)
         except positions.Refused as e:
             raise OrderRefused(str(e)) from e
         book_side, pos_side, size = ("buy" if side == "long" else "sell"), side, float(size)
@@ -134,6 +137,13 @@ def _fill(store: Store, o: dict, price: float, liquidity: str):
             return
         if o["intent"] == "open":
             emp = store.employee(o["employee_id"])
+            try:      # the net position may have grown since the order was placed
+                positions.check_open(store, o["employee_id"], PRODUCT, o["position_side"], o["size"])
+            except positions.Refused as e:
+                store.x("UPDATE orders SET status = 'cancelled', done_ts = ?, note = ? WHERE id = ?",
+                        (now(), f"not filled: {e}"[:300], o["id"]))
+                _emit(store, o, "cancelled", {"why": str(e)[:300]})
+                return
             store.x("UPDATE orders SET status = 'filled', done_ts = ?, fill_price = ?, liquidity = ? WHERE id = ?",
                     (now(), price, liquidity, o["id"]))
             _emit(store, o, "filled", {"fill_price": price, "liquidity": liquidity})

@@ -8,6 +8,15 @@ funding accumulates on the position (server/funding.py). A fill is refused when
 the quote is stale -- the office never fills at an old print.
 
 The trader closes its own positions; max_hold_s is a backstop the server enforces.
+
+ONE NET POSITION per trader, as on Kraken Futures (2026-10-10): a fill in the
+direction you already hold adds to the position at a size-weighted average entry;
+a fill against it reduces it -- oldest first, a partial reduction splitting off a
+closed row for the part that closed -- and whatever is left over flips you to the
+other side. Found before this rule: the office let one trader hold a long and a
+short at once, paying fees on both legs for no exposure, and the size cap applied
+per order rather than to the position. The cap now applies to the net position,
+counting resting orders that would add to it.
 """
 from __future__ import annotations
 
@@ -25,7 +34,21 @@ class Refused(Exception):
     """The office will not do this. The message says why, for the agent to read."""
 
 
-def check_open(store: Store, employee_id: str, pair: str, side: str, size: float) -> dict:
+EPS = 1e-9
+
+
+def _sign(side: str) -> int:
+    return 1 if side == "long" else -1
+
+
+def net_size(store: Store, employee_id: str) -> float:
+    """Signed BTC: + long, - short."""
+    return sum(_sign(p["side"]) * p["size"] for p in store.q(
+        "SELECT side, size FROM positions WHERE employee_id = ? AND closed_ts IS NULL", (employee_id,)))
+
+
+def check_open(store: Store, employee_id: str, pair: str, side: str, size: float, pending: float = 0.0) -> dict:
+    """`pending`: BTC already resting in open orders on the same side, which could fill too."""
     emp = store.employee(employee_id)
     if not emp or emp["role"] != "trader" or emp["fired_ts"]:
         raise Refused("only an employed trader can open a position")
@@ -35,14 +58,81 @@ def check_open(store: Store, employee_id: str, pair: str, side: str, size: float
         raise Refused("side must be 'long' or 'short'")
     level = progress.compute(store, employee_id)
     cap = min(float(emp["params"].get("max_size", MAX_SIZE_BTC)), level["max_size"])
-    if not 0 < size <= cap:
-        raise Refused(f"size must be > 0 and <= {cap} BTC (level {level['level']} {level['title']} allows "
-                      f"{level['max_size']}; earn XP by validated improvement to unlock more)")
+    if size <= 0:
+        raise Refused("size must be > 0")
+    net = net_size(store, employee_id)
+    after = net + _sign(side) * (size + pending)
+    if abs(after) > cap + EPS and abs(after) > abs(net) - EPS:
+        raise Refused(f"this would take your net position to {round(after, 6)} BTC; the cap is {cap} BTC "
+                      f"(level {level['level']} {level['title']} allows {level['max_size']}; earn XP by validated "
+                      f"improvement to unlock more). Now: {round(net, 6)} BTC"
+                      + (f", plus {pending} BTC resting in orders on that side" if pending else ""))
     return emp
+
+
+def fill(store: Store, emp: dict, pair: str, side: str, size: float, price: float, liquidity: str,
+         strategy_version: str | None, max_hold_s: int | None, via: str) -> dict:
+    """Apply a fill to the trader's net position. Returns the open position afterwards (or, if the
+    fill left the trader flat, the last row it closed), with `netting` saying what happened."""
+    with store.lock:
+        left, closed = size, []
+        for p in store.q("SELECT * FROM positions WHERE employee_id = ? AND closed_ts IS NULL AND side != ? "
+                         "ORDER BY id", (emp["id"], side)):
+            if left <= EPS:
+                break
+            q = min(left, p["size"])
+            if q < p["size"] - EPS:
+                p = _split(store, p, q)
+            closed.append(fill_close(store, p, price, liquidity, emp["id"], "self", f"netted by {via}"))
+            left -= q
+        out = None
+        if left > EPS:
+            same = store.q("SELECT * FROM positions WHERE employee_id = ? AND closed_ts IS NULL AND side = ? "
+                           "ORDER BY id LIMIT 1", (emp["id"], side))
+            if same:
+                out = _add(store, same[0], left, price, liquidity, via, strategy_version)
+            else:
+                out = _open(store, emp, pair, side, left, price, liquidity, strategy_version, max_hold_s, via)
+        res = dict(out or (closed[-1] if closed else {}))
+        res["netting"] = {"filled": size, "price": price, "liquidity": liquidity,
+                          "closed_positions": [c["id"] for c in closed], "added_or_opened": round(left, 9) if left > EPS else 0,
+                          "net_after": round(net_size(store, emp["id"]), 9)}
+        return res
+
+
+def _split(store: Store, p: dict, q: float) -> dict:
+    """Split q BTC off an open position into its own row (to be closed); the rest stays open."""
+    frac = q / p["size"]
+    pid = store.x("INSERT INTO positions (employee_id, strategy_version, pair, side, size, opened_ts, entry_px, max_hold_s, "
+                  "entry_liq, entry_fee, funding, regime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                  (p["employee_id"], p["strategy_version"], p["pair"], p["side"], q, p["opened_ts"], p["entry_px"],
+                   p["max_hold_s"], p["entry_liq"], (p["entry_fee"] or 0) * frac, (p["funding"] or 0) * frac, p["regime"]))
+    store.x("UPDATE positions SET size = ?, entry_fee = ?, funding = ? WHERE id = ?",
+            (p["size"] - q, (p["entry_fee"] or 0) * (1 - frac), (p["funding"] or 0) * (1 - frac), p["id"]))
+    return get(store, pid)
+
+
+def _add(store: Store, p: dict, q: float, price: float, liquidity: str, via: str, strategy_version) -> dict:
+    size = p["size"] + q
+    entry = (p["size"] * p["entry_px"] + q * price) / size
+    fee = settlement.leg_fee(q, price, liquidity)
+    liq = p["entry_liq"] if p["entry_liq"] == liquidity else "mixed"
+    store.x("UPDATE positions SET size = ?, entry_px = ?, entry_fee = ?, entry_liq = ? WHERE id = ?",
+            (size, entry, (p["entry_fee"] or 0) + fee, liq, p["id"]))
+    store.emit(p["employee_id"], "open", {"position": p["id"], "pair": p["pair"], "side": p["side"], "size": q,
+                                          "entry_px": price, "liquidity": liquidity, "fee": round(fee, 6), "via": via,
+                                          "added_to": True, "size_after": round(size, 9), "avg_entry": round(entry, 2),
+                                          "strategy_version": strategy_version})
+    return get(store, p["id"])
 
 
 def fill_open(store: Store, emp: dict, pair: str, side: str, size: float, price: float, liquidity: str,
               strategy_version: str | None, max_hold_s: int | None, via: str) -> dict:
+    return fill(store, emp, pair, side, size, price, liquidity, strategy_version, max_hold_s, via)
+
+
+def _open(store: Store, emp: dict, pair: str, side: str, size: float, price: float, liquidity: str,
+          strategy_version: str | None, max_hold_s: int | None, via: str) -> dict:
     hold = int(max_hold_s or emp["params"].get("max_hold_s", DEFAULT_MAX_HOLD_S))
     fee = settlement.leg_fee(size, price, liquidity)
     pid = store.x("INSERT INTO positions (employee_id, strategy_version, pair, side, size, opened_ts, entry_px, max_hold_s, "
@@ -63,15 +153,21 @@ def open_position(store: Store, market, employee_id: str, pair: str, side: str, 
     except Stale as e:
         raise Refused(f"no fresh price, not filling: {e}") from e
     price = q.ask if side == "long" else q.bid
-    return fill_open(store, emp, pair, side, size, price, "taker", strategy_version, max_hold_s, "market")
+    out = fill(store, emp, pair, side, size, price, "taker", strategy_version, max_hold_s, "market")
+    if out["netting"]["closed_positions"]:
+        progress.announce(store, employee_id)
+    return out
 
 
 def fill_close(store: Store, p: dict, price: float, liquidity: str, actor: str, reason: str, via: str) -> dict:
     """Close at `price`. Caller holds store.lock and has checked the position is open."""
     if p["regime"]:
-        r = settlement.settle(p["side"], p["size"], p["entry_px"], price, p["entry_liq"] or "taker", liquidity,
-                              p["funding"] or 0.0)
+        # from the fees actually paid: a position built from several fills has a mixed entry
         exit_fee = settlement.leg_fee(p["size"], price, liquidity)
+        gross = _sign(p["side"]) * (price - p["entry_px"]) * p["size"]
+        f = (p["entry_fee"] or 0.0) + exit_fee
+        pnl = gross - f + (p["funding"] or 0.0)
+        r = settlement.Result(gross, f, p["funding"] or 0.0, pnl, pnl / (p["size"] * p["entry_px"]) * 1e4)
     else:                                   # a legacy spot-4bps row: priced the way it was opened
         gross = (1 if p["side"] == "long" else -1) * (price - p["entry_px"]) * p["size"]
         f = 0.0004 * p["size"] * (p["entry_px"] + price)

@@ -86,7 +86,10 @@ What to use it for:
   place_order(..., price="best"): it joins the bid (buy) or ask (sell) as the book is when
   the order arrives. A price read earlier goes stale -- two of your first three entries
   were rejected that way. A resting order fills only when the market trades THROUGH it,
-  so an order at the best price with a 15-minute TTL often expires unfilled. Small live paper trades are
+  so an order at the best price with a 15-minute TTL often expires unfilled. Unfilled
+  orders cost nothing: up to 4 can rest at once, for up to 24 h. The trader has ONE net
+  position (Kraken's rule): an opposite fill closes or flips it, a same-side fill adds;
+  the size cap is on the net position plus resting orders that would add to it. Small live paper trades are
   cheap experiments with virtual money and the only data nobody has seen -- use them.
 - TRIGGERS: have it define should_wake(bars). The office runs it every minute without a
   model; when it fires, YOU are woken (a `trigger` event, at most every 30 min) and decide

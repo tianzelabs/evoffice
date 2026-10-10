@@ -13,6 +13,12 @@ Fees -- Kraken Futures, a new account (tier 1). You trade PF_XBTUSD, the BTC per
 - Funding every hour on open positions: when funding_per_hour > 0 longs pay shorts that
   fraction of notional, when < 0 shorts pay longs. Small per hour; it adds up over a day.
 - A position can move the right way and still lose. Size does not change the breakeven.
+- One net position (Kraken's rule): an opposite fill closes (oldest part first), a same-side
+  fill adds at an average entry. Unfilled resting orders cost nothing; up to 4 at once.
+- A maker fill is adverse by construction here: a resting buy fills only when the price
+  trades BELOW it, i.e. when the market is moving against you. The lower fee is real; the
+  free lunch is not. With a 1 USD spread (~0.12 bps) against 4 bps of maker fees, quoting
+  both sides to earn the spread loses -- a maker order still needs a direction.
 
 Horizon
 - The holding horizon is the main mechanical lever. Over 30 days of BTC, the

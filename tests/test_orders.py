@@ -84,8 +84,9 @@ def test_tick_size_and_order_count_limits(office):
     c, *_ = office
     assert place(c, intent="open", side="long", size=0.005, price=79_990.5).status_code == 409
     for i in range(orders.MAX_OPEN_ORDERS):
-        assert place(c, intent="open", side="long", size=0.005, price=79_900 - i).json()["status"] == "open"
-    assert place(c, intent="open", side="long", size=0.005, price=79_800).status_code == 409
+        assert place(c, intent="open", side="long", size=0.001, price=79_900 - i).json()["status"] == "open"
+    r = place(c, intent="open", side="long", size=0.001, price=79_800)            # 5th order: the count limit
+    assert r.status_code == 409 and "open orders" in r.json()["detail"]
 
 
 def test_closing_a_position_cancels_its_resting_close_order(office):
@@ -114,3 +115,44 @@ def test_best_joins_the_book_as_it_is_when_the_order_arrives(office):
     o = place(c, intent="open", side="long", size=0.005, price="best").json()
     assert o["status"] == "open" and o["price"] == 79_999.5          # the bid at that moment: rests, never crosses
     assert place(c, intent="open", side="long", size=0.005, price="mid").status_code == 409
+
+
+# ---------- one net position, as on Kraken ----------
+def _open(c, side, size):
+    return c.post("/positions/open", json={"side": side, "size": size}, headers=H("t1"))
+
+
+def test_an_opposite_fill_closes_rather_than_hedges(office):
+    c, _, store = office
+    _open(c, "long", 0.005)
+    r = _open(c, "short", 0.005).json()
+    assert r["netting"]["net_after"] == 0 and len(r["netting"]["closed_positions"]) == 1
+    assert not store.q("SELECT 1 FROM positions WHERE closed_ts IS NULL")
+
+
+def test_a_partial_reduction_splits_off_the_closed_part(office):
+    c, _, store = office
+    _open(c, "long", 0.005)
+    r = _open(c, "short", 0.002).json()
+    rows = store.q("SELECT size, closed_ts, entry_fee FROM positions ORDER BY id")
+    assert [round(x["size"], 6) for x in rows] == [0.003, 0.002]
+    assert rows[0]["closed_ts"] is None and rows[1]["closed_ts"] is not None
+    assert r["side"] == "long" and r["netting"]["net_after"] == pytest.approx(0.003)
+    assert rows[0]["entry_fee"] + rows[1]["entry_fee"] == pytest.approx(0.005 * 80_000.5 * 0.0005)
+
+
+def test_more_on_the_same_side_adds_at_an_average_entry_and_the_cap_is_on_the_net(office):
+    c, m, store = office
+    _open(c, "long", 0.002)
+    m.prices["PF_XBTUSD"] = 80_100.0
+    r = _open(c, "long", 0.003).json()
+    assert r["size"] == pytest.approx(0.005) and r["entry_px"] == pytest.approx((0.002 * 80_000.5 + 0.003 * 80_100.5) / 0.005)
+    assert _open(c, "long", 0.001).status_code == 409                 # junior cap 0.005 on the NET position
+    assert _open(c, "short", 0.008).json()["netting"]["net_after"] == pytest.approx(-0.003)   # flips
+
+
+def test_resting_orders_count_toward_the_cap(office):
+    c, *_ = office
+    assert place(c, intent="open", side="long", size=0.003, price=79_000).json()["status"] == "open"
+    assert place(c, intent="open", side="long", size=0.003, price=78_000).status_code == 409
+    assert place(c, intent="open", side="short", size=0.003, price=81_000).json()["status"] == "open"
