@@ -55,15 +55,42 @@ def rotate_logs() -> None:
             print(f"deleted old log {gz.relative_to(HOME)}")
 
 
+def backup_repl() -> None:
+    """The shared REPL is the office's memory (research, experience log, opportunity journal) and
+    lives in one snapshot file: keep a daily copy, 14 days."""
+    dst_dir = HOME / "backups"
+    dst_dir.mkdir(exist_ok=True)
+    for state in HOME.glob("trader-*-state"):
+        src = state / "objects.dill"
+        if not src.exists():
+            continue
+        dst = dst_dir / f"repl-{state.name}-{datetime.now(timezone.utc):%Y-%m-%d}.dill"
+        shutil.copy2(src, dst)
+        print(f"backup {dst.name}: {dst.stat().st_size // 1024} KB")
+        for old in sorted(dst_dir.glob(f"repl-{state.name}-*.dill"))[:-KEEP_DAYS]:
+            old.unlink()
+
+
 def prune_heldout() -> None:
-    for f in sorted((HOME / "heldout").glob("*.json"))[:-CACHE_DAYS]:
+    """Caches per kind -- the daily held-out file, the daily train file, the hourly recent file.
+    (Found 2026-10-10: one alphabetical "keep the last 3" across kinds would delete today's held-out
+    file and let the hourly recent files pile up.)"""
+    d = HOME / "heldout"
+    kinds = {"heldout": [], "train": [], "recent": []}
+    for f in d.glob("*.json"):
+        kinds["train" if "_train_" in f.name else "recent" if "_recent_" in f.name else "heldout"].append(f)
+    keep = {"heldout": CACHE_DAYS, "train": 2, "recent": 3}
+    for kind, files in kinds.items():
+        for f in sorted(files)[:-keep[kind]]:
+            f.unlink()
+            print(f"deleted {kind} cache {f.name}")
+    for f in d.glob("*.json.tmp"):
         f.unlink()
-        print(f"deleted held-out cache {f.name}")
 
 
 if __name__ == "__main__":
     failed = False
-    for step in (backup_db, rotate_logs, prune_heldout):
+    for step in (backup_db, backup_repl, rotate_logs, prune_heldout):
         try:
             step()
         except Exception as e:             # one failing step must not hide the others

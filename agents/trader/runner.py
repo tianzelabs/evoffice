@@ -53,6 +53,15 @@ for _name in ("exec", "eval", "compile", "globals", "locals"):
     local_repl._SAFE_BUILTINS[_name] = getattr(builtins, _name)
 
 
+BIG_SNAPSHOT = 50_000_000
+
+
+def _atomic_write(path: Path, data: bytes):
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+
+
 # ONE LIVE NAMESPACE. rlms executes every cell in a fresh {**globals, **locals} copy, so a function
 # defined in a cell keeps THAT copy as its __globals__: it sees facts (positions_open, my_orders,
 # office_time, ...) as they were when it was defined, forever. Found live (2026-10-10): the manager's
@@ -332,10 +341,17 @@ class Runner:
                 keep[k] = v
             except Exception as e:
                 lost.append(f"{k} ({type(e).__name__})")
-        (STATE / "objects.dill").write_bytes(dill.dumps(keep, recurse=True))
+        blob = dill.dumps(keep, recurse=True)
+        _atomic_write(STATE / "objects.dill", blob)        # a crash mid-write must not corrupt the office's memory
         hist = [self.ns[k] for k in mapmod.history_names(self.ns)]
         prev = self.ns.get("past_turns_before_restart") or []
-        (STATE / "history.dill").write_bytes(dill.dumps(list(prev) + hist[-50:]))
+        _atomic_write(STATE / "history.dill", dill.dumps(list(prev) + hist[-50:]))
+        if len(blob) > BIG_SNAPSHOT and time.time() - getattr(self, "big_noted", 0) > 6 * 3600:
+            sizes = sorted(((len(dill.dumps(v, recurse=True)), k) for k, v in keep.items()), reverse=True)[:5]
+            self.notes.append(f"the shared REPL snapshot is {len(blob) // 1_000_000} MB; largest: "
+                              + ", ".join(f"{k} {n // 1_000_000} MB" for n, k in sizes)
+                              + ". Keep results, not raw data: market data can always be fetched again")
+            self.big_noted = time.time()
         (STATE / "runner.json").write_text(json.dumps({"turn_n": self.turn_n, "version": self.version,
                                                        "last_seen": self.last_seen, "last_turn": self.last_turn,
                                                        "repl_seen": self.repl_seen}))
@@ -405,8 +421,17 @@ class Runner:
         me = self.office.me()["id"]
         if me == self.me:
             return
-        log(f"{self.me} was fired; {me} takes the seat. Wiping objects and history.")
-        for name in ("objects.dill", "history.dill", "runner.json"):
+        # The REPL is the OFFICE's (one shared REPL, 2026-10-10): the manager's research, the experience
+        # log and the opportunity journal live in it, so firing a trader must not erase it. The trader's
+        # own past turns go; a copy of the namespace is archived first.
+        log(f"{self.me} was fired; {me} takes the seat. Archiving the shared REPL, clearing the trader's own turns.")
+        arch = STATE / "archive"
+        arch.mkdir(exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+        for name in ("objects.dill", "history.dill"):
+            if (STATE / name).exists():
+                shutil.copy2(STATE / name, arch / f"{self.me}-{stamp}-{name}")
+        for name in ("history.dill", "runner.json"):
             (STATE / name).unlink(missing_ok=True)
         if (STATE / "trajectories").exists():           # kept for the record, out of the new hire's way
             shutil.move(str(STATE / "trajectories"), str(STATE / f"trajectories-{self.me}"))

@@ -13,6 +13,8 @@ then report back.
 The REPL is SHARED: it is the office's one REPL, and the manager runs its own code in it
 too, between your turns. Objects you did not define are probably the manager's -- use
 them, and never delete or overwrite one you did not create unless the task says so.
+Keep it tidy: every name in it is shown on every turn. Do scratch work inside a dict or
+delete throwaway names (a, b, r, tmp) when done; keep results, not copies of market data.
 
 Doing a task:
 - Do it with code in the REPL. Read data with code; never ask for it to be pasted.

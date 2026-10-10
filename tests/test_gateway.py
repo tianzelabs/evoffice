@@ -127,3 +127,14 @@ def test_an_agent_reports_only_its_own_state(office):
 def test_bars_come_from_the_market(office):
     c, _, _ = office
     assert len(c.get("/bars?minutes=5").json()) == 5
+
+
+def test_a_null_answer_becomes_empty_text_not_a_crash(tmp_path):
+    def upstream(request):
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": None}}],
+                                         "usage": {"prompt_tokens": 1, "completion_tokens": 0, "cost": 0.001}})
+    store = Store(str(tmp_path / "o.db"))
+    gw = llm.Gateway(store, key="k", transport=httpx.MockTransport(upstream))
+    c = TestClient(create_app(store, FakeMarket(), {"t1": {"id": "trader-1", "role": "trader"}}, backstop_every_s=0, gateway=gw))
+    r = c.post("/llm/v1/chat/completions", json=CHAT, headers=H("t1"))
+    assert r.status_code == 200 and r.json()["choices"][0]["message"]["content"] == ""

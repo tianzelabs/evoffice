@@ -120,4 +120,13 @@ class Gateway:
             raise GatewayRefused(502, f"upstream returned 200 without a usable answer: {str(data)[:300]}")
         if r.status_code != 200:
             raise GatewayRefused(r.status_code, f"upstream: {str(data.get('error', data))[:300]}")
+        # Found live (2026-10-10): a paid 200 whose message content was null (the model spent its turn
+        # without text). rlms parses content as a string and crashed, losing the whole task. An empty
+        # string is what it means; the RLM simply takes another iteration.
+        if route == "chat":
+            for ch in data.get("choices") or []:
+                msg = ch.get("message") or {}
+                if msg.get("content") is None:
+                    msg["content"] = ""
+                    ch["message"] = msg
         return data

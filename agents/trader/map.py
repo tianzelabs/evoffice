@@ -39,6 +39,28 @@ def own_objects(ns: dict, facts: set, tools: set) -> list[str]:
                   and k not in SCAFFOLD and not k.startswith("context_") and not HISTORY.match(k))
 
 
+def grouped(ns: dict, names: list[str]) -> str:
+    """Objects, compactly: families sharing a prefix (mgr_fix_*, mgr_exp_*) collapse to one entry.
+    The shared REPL holds the whole office's work; listed one by one it grew past 170 names in an
+    afternoon, and every name costs context on every turn."""
+    fam: dict[str, list[str]] = {}
+    for k in names:
+        parts = k.split("_")
+        key = "_".join(parts[:2]) + "_" if len(parts) > 2 else None
+        fam.setdefault(key or k, []).append(k)
+    out = []
+    for key, members in fam.items():
+        if len(members) >= 4 and key.endswith("_"):
+            out.append(f"{key}* ({len(members)} objects)")
+        else:
+            out += [f"{k} ({shape(ns[k])})" for k in members]
+    return ", ".join(out)
+
+
+def throwaways(names: list[str]) -> list[str]:
+    return [k for k in names if len(k) <= 2 or k in ("tmp", "row", "res", "result", "out", "src", "code", "data", "key")]
+
+
 def history_names(ns: dict) -> list[str]:
     return sorted((k for k in ns if HISTORY.match(k)), key=lambda k: int(k.split("_")[1]))
 
@@ -54,8 +76,11 @@ def render(ns: dict, facts: dict[str, tuple[str, str, str]], tools: dict[str, st
     out.append("TOOLS: " + "; ".join(f"{k}{sig}" for k, sig in tools.items()))
     out.append("")
     mine = own_objects(ns, set(facts), set(tools))
-    out.append("YOUR OBJECTS (you created them; they persist): "
-               + (", ".join(f"{k} ({shape(ns[k])})" for k in mine) or "none yet"))
+    out.append("OBJECTS IN THE SHARED REPL (yours and the manager's; they persist): " + (grouped(ns, mine) or "none yet"))
+    junk = throwaways(mine)
+    if len(junk) >= 5:
+        out.append(f"NOTE: {len(junk)} throwaway names clutter the shared REPL ({', '.join(junk[:12])}); "
+                   "delete the ones you created and keep scratch work inside a dict")
     out.append(f"YOUR STRATEGY VERSION (measured by the office from your functions and models): {version or 'none yet'}")
     hist = history_names(ns)
     if hist:

@@ -104,7 +104,13 @@ open_position, close_position, evaluate -- acting as the trader's seat). Put you
 models, candidate strategies and results THERE, as named objects, so the trader's tasks
 and your next wake build on the same state; the strategy version is measured from it.
 Do not overwrite the trader's objects without saying so. Your Codex workspace is only
-for scratch files. Do heavy computation yourself in the shared REPL; give the trader
+for scratch files.
+KEEP THE SHARED REPL TIDY -- it is the office's memory and every name in it is shown to the
+trader on every turn: prefix what you own (mgr_...), keep scratch work inside one dict
+and delete throwaway names (a, b, r, tmp...), store results and decisions rather than
+copies of market data (market_context()/bars can always be fetched again), and keep
+journals and experience logs append-only. It is backed up daily and survives restarts and
+firings. Do heavy computation yourself in the shared REPL; give the trader
 tasks for what needs a model's judgement or many steps of exploration.
 
 What the boss judges: whether the office keeps changing how it trades and can show
