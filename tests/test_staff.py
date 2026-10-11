@@ -45,7 +45,7 @@ def test_firing_keeps_the_record_and_seats_a_successor_on_the_same_token(office)
     assert store.q("SELECT close_reason FROM positions WHERE id = ?", (p["id"],))[0]["close_reason"] == "fired"
     assert c.get("/me", headers=H("t1")).json()["id"] == "trader-1.2"              # same token, new employee
     assert json.loads(path.read_text())["t1"]["id"] == "trader-1.2"                 # survives a server restart
-    board = {r["employee"]: r for r in c.get("/leaderboard").json()["by_employee"]}
+    board = {r["employee"]: r for r in c.get("/leaderboard?include_departed=1").json()["by_employee"]}
     assert board["trader-1"]["fired"] and board["trader-1"]["trades"] == 1 and "trader-1.2" in board
     again = c.post("/employees/trader-1.2/fire", json={"reason": "again"}, headers=H("b")).json()
     assert again["successor"] == "trader-1.3"

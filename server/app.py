@@ -159,9 +159,30 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     def me(w: dict = Depends(who)):
         return w
 
+    # Departed employees (fired, or their seat closed) are not shown (the boss, 2026-10-11): every
+    # view leaves them out unless ?include_departed=1. Nothing is deleted -- the record stays for audit.
+    def departed() -> set[str]:
+        return {r["id"] for r in store.q("SELECT id FROM employees WHERE fired_ts IS NOT NULL")}
+
+    def visible(e: dict, gone: set[str]) -> bool:
+        p = e.get("payload") or {}
+        return not (e["actor"] in gone or p.get("employee") in gone or p.get("to") in gone)
+
+    def visible_events(since: int, gone: set[str]) -> list[dict]:
+        """A page of visible events. A raw page that is entirely hidden must not end the client's paging
+        (it stops on an empty page), so keep reading until something visible or the end."""
+        while True:
+            raw = store.events_since(since)
+            if not raw:
+                return []
+            page = [e for e in raw if visible(e, gone)]
+            if page:
+                return page
+            since = raw[-1]["id"]
+
     @app.get("/events")
-    def events(since: int = 0):
-        return store.events_since(since)
+    def events(since: int = 0, include_departed: int = 0):
+        return store.events_since(since) if include_departed else visible_events(since, departed())
 
     @app.get("/stream")
     async def stream(request: Request, since: int = 0):
@@ -170,9 +191,11 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             last, idle = since, 0
             while not await request.is_disconnected():
                 rows = await run_in_threadpool(store.events_since, last)
+                gone = departed() if rows else set()
                 for r in rows:
                     last = r["id"]
-                    yield f"id: {r['id']}\ndata: {json.dumps(r, ensure_ascii=False)}\n\n"
+                    if visible(r, gone):
+                        yield f"id: {r['id']}\ndata: {json.dumps(r, ensure_ascii=False)}\n\n"
                 idle = 0 if rows else idle + 1
                 if idle and idle % 30 == 0:
                     yield ": keepalive\n\n"
@@ -235,8 +258,12 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         return positions.listing(store, employee, open)
 
     @app.get("/leaderboard")
-    def board():
-        return leaderboard.standings(store)
+    def board(include_departed: int = 0):
+        b = leaderboard.standings(store)
+        if not include_departed:
+            gone = departed()
+            b = {k: [r for r in v if r["employee"] not in gone] for k, v in b.items()}
+        return b
 
     @app.get("/account")
     async def get_account():
@@ -274,9 +301,14 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         return broker.checklist(store, employee_id)
 
     @app.get("/season")
-    def season():
+    def season(include_departed: int = 0):
         """This week's standings, when it ends, and every trophy handed out so far."""
-        return seasons.summary(store)
+        s = seasons.summary(store)
+        if not include_departed:
+            gone = departed()
+            s["standings"] = [r for r in s["standings"] if r["employee"] not in gone]
+            s["trophies"] = {k: v for k, v in s["trophies"].items() if k not in gone}
+        return s
 
     @app.get("/progress")
     def progress_all():
@@ -284,9 +316,10 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         return progress.all_progress(store)
 
     @app.get("/iterations")
-    def iteration_timeline():
+    def iteration_timeline(include_departed: int = 0):
         """Each trader's strategy versions with their held-out evaluations: did the change help?"""
-        return iterations.timeline(store)
+        t = iterations.timeline(store)
+        return t if include_departed else {k: v for k, v in t.items() if k not in departed()}
 
     @app.get("/bars")
     async def bars(minutes: int = 60, pair: str = PRODUCT):
@@ -336,8 +369,9 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             raise HTTPException(409, str(e))
 
     @app.get("/employees")
-    def employees():
-        rows = store.q("SELECT * FROM employees ORDER BY hired_ts")
+    def employees(include_departed: int = 0):
+        rows = store.q("SELECT * FROM employees " + ("" if include_departed else "WHERE fired_ts IS NULL ")
+                       + "ORDER BY hired_ts")
         for r in rows:
             r["params"] = json.loads(r["params"])
         return rows

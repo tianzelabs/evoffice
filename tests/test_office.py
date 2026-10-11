@@ -176,3 +176,21 @@ def test_a_closed_trade_can_be_reviewed_by_the_numbers(office):
     r = c.get(f"/positions/{pid}/review").json()
     assert r["position"] == pid and r["open"] is False and r["pnl_bps"] < 0 and r["hold_min"] >= 0
     assert c.get("/positions/999/review").status_code == 404
+
+
+def test_departed_employees_are_not_shown_but_are_kept(tmp_path):
+    tokens = {k: dict(v) for k, v in TOKENS.items()}
+    store = Store(str(tmp_path / "o.db"))
+    c = TestClient(create_app(store, FakeMarket(), tokens, backstop_every_s=0))
+    c.post("/say", json={"text": "hello from trader-2"}, headers=H("t2"))
+    c.post("/positions/open", json={"side": "long", "size": 0.001}, headers=H("t2"))
+    c.post("/employees/trader-2/fire", json={"reason": "seat closed", "replace": False}, headers=H("b"))
+    for _ in range(3):
+        c.post("/say", json={"text": "still here"}, headers=H("t1"))
+    assert "trader-2" not in [e["id"] for e in c.get("/employees").json()]
+    assert "trader-2" not in [r["employee"] for r in c.get("/leaderboard").json()["by_employee"]]
+    assert "trader-2" not in c.get("/iterations").json()
+    evs = c.get("/events").json()
+    assert evs and all(e["actor"] != "trader-2" and e["payload"].get("employee") != "trader-2" for e in evs)
+    assert any(e["actor"] == "trader-2" for e in c.get("/events?include_departed=1").json())
+    assert store.q("SELECT COUNT(*) AS n FROM positions WHERE employee_id = 'trader-2'")[0]["n"] == 1   # kept
