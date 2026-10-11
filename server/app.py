@@ -85,13 +85,18 @@ class Backtest(BaseModel):
 
 class Order(BaseModel):
     intent: str                       # "open" | "close"
-    price: float | str                # a number, or "best" | "bid" | "ask": the book at the moment of placing
+    price: float | str | None = None  # a number, or "best" | "bid" | "ask"; None for a stop/take-profit at market
     size: float | None = None         # for intent = open
     side: str | None = None           # "long" | "short", for intent = open
     position_id: int | None = None    # for intent = close
     post_only: bool = True
-    ttl_minutes: int | None = None
+    ttl_minutes: int | None = None    # None: good till cancelled
     strategy_version: str | None = None
+    order_type: str = "limit"         # limit | ioc | stop | take_profit
+    trigger_price: float | None = None
+    trigger_signal: str = "mark"      # mark | last | index
+    reduce_only: bool = False
+    oco: str | None = None
 
 
 class Open(BaseModel):
@@ -115,12 +120,12 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             while True:
                 await asyncio.sleep(backstop_every_s)
                 await run_in_threadpool(positions.enforce_max_hold, store, market)
-                await run_in_threadpool(account.liquidate_if_needed, store, market)
                 await run_in_threadpool(scheduler.tick, store, market)      # stand-up and market alerts
         async def matcher():
             while True:                    # resting limit orders: filled when the market trades through them
                 await asyncio.sleep(2)
                 await run_in_threadpool(orders.match, store, market)
+                await run_in_threadpool(account.liquidate_if_needed, store, market)   # every 2 s, like the matcher
         tasks = [asyncio.create_task(backstop()), asyncio.create_task(matcher())] if backstop_every_s > 0 else []
         yield
         for t in tasks:
@@ -194,7 +199,8 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
         try:
             return await run_in_threadpool(orders.place, store, market, w, body.intent, body.size, body.price,
                                            body.side, body.position_id, body.post_only, body.ttl_minutes,
-                                           body.strategy_version)
+                                           body.strategy_version, body.order_type, body.trigger_price,
+                                           body.trigger_signal, body.reduce_only, body.oco)
         except orders.OrderRefused as e:
             raise HTTPException(409, str(e))
 

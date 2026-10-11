@@ -28,6 +28,48 @@ class Stale(Exception):
 
 
 @dataclass(frozen=True)
+class Book:
+    """Kraken's order book as captured (top 10 levels a side, once a second): (price, qty) best first."""
+    ts: float
+    bids: list
+    asks: list
+
+    def side(self, taking: str) -> list:
+        """The levels a `taking` order ('buy' or 'sell') executes against."""
+        return self.asks if taking == "buy" else self.bids
+
+    def queue_at(self, resting: str, price: float) -> float | None:
+        """Size displayed ahead of a new resting order at `price`: 0 inside the spread, the level's size if
+        the level is shown, None if it lies deeper than the captured levels (then only a trade-through fills it)."""
+        lv = self.bids if resting == "buy" else self.asks
+        if not lv:
+            return None
+        best = lv[0][0]
+        if (price > best) if resting == "buy" else (price < best):
+            return 0.0
+        for px, qty in lv:
+            if abs(px - price) < 1e-9:
+                return qty
+        deepest = lv[-1][0]
+        return 0.0 if ((price > deepest) if resting == "buy" else (price < deepest)) else None
+
+
+def walk(levels: list, size: float, limit: float | None = None, taking: str = "buy") -> tuple[float, float]:
+    """Execute `size` against `levels` best-first, never past `limit`. Returns (filled qty, VWAP)."""
+    left, cost = size, 0.0
+    for px, qty in levels:
+        if limit is not None and ((px > limit) if taking == "buy" else (px < limit)):
+            break
+        q = min(left, qty)
+        cost += q * px
+        left -= q
+        if left <= 1e-12:
+            break
+    filled = size - max(left, 0.0)
+    return filled, (cost / filled if filled > 0 else 0.0)
+
+
+@dataclass(frozen=True)
 class Quote:
     pair: str
     price: float          # last trade
@@ -132,13 +174,40 @@ class FuturesMarket:
                                      "funding_per_hour": num(fr), "open_interest": (num(oi) or None)})
         return [rows[k] for k in sorted(rows)]
 
-    def trades_since(self, pair: str, since_epoch: float) -> list[tuple[float, float]]:
-        """(epoch seconds, price) of every trade after `since_epoch`, oldest first -- for limit fills."""
+    def trades_since(self, pair: str, since_epoch: float) -> list[tuple]:
+        """(epoch seconds, price, qty, taker side) of every trade after `since_epoch`, oldest first."""
         _check(pair)
         out = self._query(
-            f"SELECT toUnixTimestamp64Milli(ts) / 1000.0, price FROM {self.database}.futures_trades "
+            f"SELECT toUnixTimestamp64Milli(ts) / 1000.0, price, qty, side FROM {self.database}.futures_trades "
             f"WHERE product = '{pair}' AND ts > fromUnixTimestamp64Milli(toInt64({since_epoch * 1000:.0f})) "
             f"ORDER BY ts LIMIT 100000 FORMAT TSV")
+        rows = []
+        for l in out.splitlines():
+            t, p, q, s = l.split("\t")
+            rows.append((float(t), float(p), float(q), s))
+        return rows
+
+    def book(self, pair: str = PRODUCT) -> Book:
+        _check(pair)
+        out = self._query(
+            f"SELECT toUnixTimestamp64Milli(ts) / 1000.0 AS t, bid_px, bid_qty, ask_px, ask_qty "
+            f"FROM {self.database}.futures_book WHERE product = '{pair}' ORDER BY ts DESC LIMIT 1 FORMAT JSONEachRow")
+        if not out.strip():
+            raise Stale(f"{pair}: no order book captured")
+        import json as _json
+        r = _json.loads(out.splitlines()[0])
+        age = time.time() - float(r["t"])
+        if age > FRESH_S:
+            raise Stale(f"{pair}: order book is {age:.0f}s old")
+        return Book(float(r["t"]), list(zip(r["bid_px"], r["bid_qty"])), list(zip(r["ask_px"], r["ask_qty"])))
+
+    def signals_since(self, pair: str, since_epoch: float) -> list[tuple[float, float, float]]:
+        """(epoch, mark, index) samples after `since_epoch` -- what stop/take-profit orders trigger on."""
+        _check(pair)
+        out = self._query(
+            f"SELECT toUnixTimestamp64Milli(ts) / 1000.0, mark, index_price FROM {self.database}.futures_ticker "
+            f"WHERE product = '{pair}' AND ts > fromUnixTimestamp64Milli(toInt64({since_epoch * 1000:.0f})) "
+            f"AND mark > 0 ORDER BY ts LIMIT 100000 FORMAT TSV")
         return [tuple(map(float, l.split("\t"))) for l in out.splitlines()]
 
     def funding_history(self, pair: str, from_epoch: float, to_epoch: float) -> dict[int, float]:
@@ -157,7 +226,9 @@ class FakeMarket:
     spread: float = 1.0
     stale: bool = False
     funding: float = 0.0
-    tape: list[tuple[float, float]] = field(default_factory=list)
+    tape: list[tuple] = field(default_factory=list)
+    depth: float = 5.0                      # BTC shown at each of 10 levels a side
+    marks: list[tuple] = field(default_factory=list)
 
     def quote(self, pair: str = PRODUCT) -> Quote:
         if self.stale or pair not in self.prices:
@@ -165,11 +236,21 @@ class FakeMarket:
         p = self.prices[pair]
         return Quote(pair, p, 0.0, p - self.spread / 2, p + self.spread / 2, p, self.funding)
 
-    def trade(self, price: float, at: float | None = None):
-        self.tape.append((at if at is not None else time.time(), price))
+    def trade(self, price: float, at: float | None = None, qty: float = 1.0, side: str = ""):
+        self.tape.append((at if at is not None else time.time(), price, qty, side))
 
-    def trades_since(self, pair: str, since_epoch: float) -> list[tuple[float, float]]:
+    def trades_since(self, pair: str, since_epoch: float) -> list[tuple]:
         return [t for t in self.tape if t[0] > since_epoch]
+
+    def book(self, pair: str = PRODUCT) -> Book:
+        q = self.quote(pair)
+        return Book(time.time(), [(q.bid - i, self.depth) for i in range(10)], [(q.ask + i, self.depth) for i in range(10)])
+
+    def mark(self, price: float, at: float | None = None):
+        self.marks.append((at if at is not None else time.time(), price, price))
+
+    def signals_since(self, pair: str, since_epoch: float) -> list[tuple]:
+        return [m for m in self.marks if m[0] > since_epoch]
 
     def bars_between(self, pair: str, from_minutes_ago: int, to_minutes_ago: int) -> list[dict]:
         return self.bars(pair, from_minutes_ago - to_minutes_ago)

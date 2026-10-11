@@ -23,7 +23,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from . import account, fees, progress, settlement
-from .market import PRODUCT, Stale
+from .market import PRODUCT, Stale, walk
+
+SIZE_STEP = 0.0001                       # Kraken: contractValueTradePrecision 4 for PF_XBTUSD
 from .store import Store, now
 
 DEFAULT_MAX_HOLD_S = 365 * 24 * 3600     # no forced exit by default (the boss, 2026-10-11); a manager may set one
@@ -60,6 +62,8 @@ def check_open(store: Store, employee_id: str, pair: str, side: str, size: float
         raise Refused("side must be 'long' or 'short'")
     if size <= 0:
         raise Refused("size must be > 0")
+    if abs(size / SIZE_STEP - round(size / SIZE_STEP)) > 1e-6:
+        raise Refused(f"size must be a multiple of {SIZE_STEP} BTC (Kraken's precision for PF_XBTUSD)")
     net = net_size(store, employee_id)
     after = net + _sign(side) * (size + pending)
     if abs(after) <= abs(net) + EPS:
@@ -78,7 +82,8 @@ def check_open(store: Store, employee_id: str, pair: str, side: str, size: float
 
 
 def fill(store: Store, emp: dict, pair: str, side: str, size: float, price: float, liquidity: str,
-         strategy_version: str | None, max_hold_s: int | None, via: str) -> dict:
+         strategy_version: str | None, max_hold_s: int | None, via: str, reason: str = "self",
+         extra_fee: float = 0.0) -> dict:
     """Apply a fill to the trader's net position. Returns the open position afterwards (or, if the
     fill left the trader flat, the last row it closed), with `netting` saying what happened."""
     with store.lock:
@@ -90,7 +95,8 @@ def fill(store: Store, emp: dict, pair: str, side: str, size: float, price: floa
             q = min(left, p["size"])
             if q < p["size"] - EPS:
                 p = _split(store, p, q)
-            closed.append(fill_close(store, p, price, liquidity, emp["id"], "self", f"netted by {via}"))
+            closed.append(fill_close(store, p, price, liquidity, emp["id"], reason, f"netted by {via}",
+                                     extra_fee * q / size))
             left -= q
         out = None
         if left > EPS:
@@ -153,25 +159,24 @@ def _open(store: Store, emp: dict, pair: str, side: str, size: float, price: flo
 
 def open_position(store: Store, market, employee_id: str, pair: str, side: str, size: float,
                   strategy_version: str | None = None, max_hold_s: int | None = None) -> dict:
-    """A market order: buys at the ask, sells at the bid, pays the taker fee."""
-    try:
-        q = market.quote(pair if pair == PRODUCT else PRODUCT)
-    except Stale as e:
-        raise Refused(f"no fresh price, not filling: {e}") from e
-    emp = check_open(store, employee_id, pair, side, size, price=q.ask if side == "long" else q.bid)
-    price = q.ask if side == "long" else q.bid
+    """A market order: walks Kraken's book (asks for a buy, bids for a sell) and pays the taker fee
+    on the volume-weighted price, as Kraken fills it."""
+    price = market_price(market, "buy" if side == "long" else "sell", size)
+    emp = check_open(store, employee_id, pair, side, size, price=price)
     out = fill(store, emp, pair, side, size, price, "taker", strategy_version, max_hold_s, "market")
     if out["netting"]["closed_positions"]:
         progress.announce(store, employee_id)
     return out
 
 
-def fill_close(store: Store, p: dict, price: float, liquidity: str, actor: str, reason: str, via: str) -> dict:
+def fill_close(store: Store, p: dict, price: float, liquidity: str, actor: str, reason: str, via: str,
+               extra_fee: float = 0.0) -> dict:
     """Close at `price`. Caller holds store.lock and has checked the position is open."""
     if p["regime"]:
         # from the fees actually paid: a position built from several fills has a mixed entry
         exit_fee = settlement.leg_fee(p["size"], price, liquidity)
         gross = _sign(p["side"]) * (price - p["entry_px"]) * p["size"]
+        exit_fee += extra_fee                      # a liquidation fee, on top of the taker fee
         f = (p["entry_fee"] or 0.0) + exit_fee
         pnl = gross - f + (p["funding"] or 0.0)
         r = settlement.Result(gross, f, p["funding"] or 0.0, pnl, pnl / (p["size"] * p["entry_px"]) * 1e4)
@@ -202,14 +207,24 @@ def close_position(store: Store, market, position_id: int, actor: str, reason: s
             raise Refused("you can only close your own positions")
         if p["closed_ts"]:
             raise Refused(f"position {position_id} is already closed")
-        try:
-            q = market.quote(p["pair"] if p["pair"] == PRODUCT else PRODUCT)
-        except Stale as e:
-            raise Refused(f"no fresh price, not closing yet: {e}") from e
-        price = q.bid if p["side"] == "long" else q.ask
+        price = market_price(market, "sell" if p["side"] == "long" else "buy", p["size"])
         out = fill_close(store, p, price, "taker", actor, reason, "market")
     progress.announce(store, p["employee_id"])
     return out
+
+
+def market_price(market, taking: str, size: float, limit: float | None = None) -> float:
+    """VWAP of a market order of `size` against the captured book. Refuses rather than invent a price
+    for volume deeper than the captured levels."""
+    try:
+        book = market.book(PRODUCT)
+    except Stale as e:
+        raise Refused(f"no fresh order book, not filling: {e}") from e
+    filled, vwap = walk(book.side(taking), size, limit, taking)
+    if filled < size - EPS:
+        raise Refused(f"only {filled:.4f} of {size} BTC is shown in the captured book; not filling the rest at an "
+                      "invented price -- use a smaller size or a limit order")
+    return vwap
 
 
 def enforce_max_hold(store: Store, market) -> list[int]:

@@ -70,7 +70,7 @@ def test_a_stale_feed_refuses_to_fill_rather_than_guess(office):
     c, m, store = office
     m.stale = True
     r = c.post("/positions/open", json={"side": "long", "size": 0.005}, headers=H("t1"))
-    assert r.status_code == 409 and "no fresh price" in r.json()["detail"]
+    assert r.status_code == 409 and "no fresh" in r.json()["detail"]
     assert store.q("SELECT COUNT(*) AS n FROM positions")[0]["n"] == 0
     assert c.get("/price").status_code == 503
 

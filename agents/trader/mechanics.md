@@ -1,24 +1,30 @@
 Shared mechanics -- measured facts about this market and these tools, not a
 strategy. What to do with them is yours.
 
-Fees -- Kraken Futures, a new account (tier 1). You trade PF_XBTUSD, the BTC perpetual.
-- TAKER 0.05% per side: a market order (open_position / close_position) buys at the ask
-  and sells at the bid (the spread is usually 1 USD, ~0.12 bps).
-- MAKER 0.02% per side: a limit order (place_order) that rests in the book and is filled
-  later. It fills only when the market trades THROUGH your price -- a trade at exactly
-  your price is not enough -- and maybe never. post_only (default) refuses an order that
-  would fill at once, so you never pay taker by accident.
-- Round trip: taker+taker 10 bps, maker+taker 7 bps, maker+maker 4 bps. To break even a
-  taker round trip needs ~0.10% in your favour (~83 points at 83,000); maker+maker ~0.04%.
-- Funding every hour on open positions: when funding_per_hour > 0 longs pay shorts that
-  fraction of notional, when < 0 shorts pay longs. Small per hour; it adds up over a day.
+Kraken Futures, exactly (an EEA retail account; the office simulates it against Kraken's live book).
+Fees -- tier 1: TAKER 0.05%, MAKER 0.02% per side. Round trip: taker+taker 10 bps, maker+taker 7,
+maker+maker 4. Funding every hour on open positions at Kraken's published rate.
+Orders (place_order):
+- market (open_position / close_position): walks the book -- the volume-weighted price over the
+  levels it takes, taker fee.
+- limit: good till cancelled (unless ttl_minutes). Crossing on arrival it executes at once as
+  taker up to its price; post_only rejects it instead. Resting, it queues behind the size already
+  shown at its price and fills as maker -- partially or fully -- as trades print there beyond that
+  queue, or completely when the market trades through it.
+- ioc: what crosses now, the rest cancelled.
+- stop / take_profit: held until the trigger signal (mark by default, or last, or index) reaches
+  trigger_price; then market, or a limit at price. reduce_only never flips a position; oco='tag'
+  links a take-profit and a stop so one cancels the other. Size in 0.0001 BTC, price in 1 USD.
+Margin -- EEA retail: initial 10% of notional (max 10x), maintenance 5%, one net position.
+Liquidation (Kraken's Equity Protection Process): below maintenance the position is cut at market
+in 10% steps, each paying the taker fee AND that slice's share of the remaining equity; below 70%
+of maintenance it is closed at once with a further 0.5% fee. With flat 5% margin the steps never
+restore the ratio, so being liquidated costs nearly all the margin. A stop placed well before the
+liquidation price is far cheaper than being liquidated.
 - A position can move the right way and still lose. Size does not change the breakeven.
-- One net position (Kraken's rule): an opposite fill closes (oldest part first), a same-side
-  fill adds at an average entry. Unfilled resting orders cost nothing; up to 4 at once.
-- A maker fill is adverse by construction here: a resting buy fills only when the price
-  trades BELOW it, i.e. when the market is moving against you. The lower fee is real; the
-  free lunch is not. With a 1 USD spread (~0.12 bps) against 4 bps of maker fees, quoting
-  both sides to earn the spread loses -- a maker order still needs a direction.
+- One net position: an opposite fill closes (oldest part first), a same-side fill adds.
+- A maker fill is adverse by construction: a resting buy fills when sellers hit it, i.e. when the
+  price is falling into it. The lower fee is real; the free lunch is not.
 
 Horizon
 - The holding horizon is the main mechanical lever. Over 30 days of BTC, the

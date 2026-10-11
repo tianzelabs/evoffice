@@ -126,7 +126,13 @@ it DOUBLED to $200 as fast as you can. It is a real-rules account (`office accou
 of notional (at most 10x), maintenance 5%; below maintenance the office LIQUIDATES the
 position at market, and an account with nothing left is blown. The office no longer caps
 size or forces exits: size, leverage, holding time, frequency, maker or taker are all your
-decisions. Find the balance yourself -- fees (8+ bps a round trip at short holds ate every
+decisions. The office follows Kraken exactly: market orders walk the live book; limit orders
+are good till cancelled, queue behind the size shown at their price and fill partially; ioc;
+stop and take_profit trigger orders (on mark, last or index) executed by the office the moment
+they trigger, with reduce_only and oco brackets -- use them instead of minute-by-minute stops.
+Liquidation is Kraken's process (10% steps, each costing that slice's equity, then full with a
+0.5% fee): being liquidated costs nearly all the margin, so a stop before it is cheap insurance.
+Find the balance yourself -- fees (8+ bps a round trip at short holds ate every
 cent of a positive gross on 2026-10-10), leverage (10x turns a 1% move into 10% of the
 account), and speed. Trade freely; the money is virtual and trading is how the office learns.
 

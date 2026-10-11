@@ -80,12 +80,13 @@ def test_cancel_and_expiry(office):
     assert orders.get(store, o2["id"])["status"] == "expired"
 
 
-def test_tick_size_and_order_count_limits(office):
+def test_tick_size_and_order_count_limits(office, monkeypatch):
     c, *_ = office
+    monkeypatch.setattr(orders, "MAX_OPEN_ORDERS", 4)
     assert place(c, intent="open", side="long", size=0.005, price=79_990.5).status_code == 409
     for i in range(orders.MAX_OPEN_ORDERS):
         assert place(c, intent="open", side="long", size=0.001, price=79_900 - i).json()["status"] == "open"
-    r = place(c, intent="open", side="long", size=0.001, price=79_800)            # 5th order: the count limit
+    r = place(c, intent="open", side="long", size=0.001, price=79_800)            # one over the count limit
     assert r.status_code == 409 and "open orders" in r.json()["detail"]
 
 

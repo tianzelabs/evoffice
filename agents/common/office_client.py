@@ -58,12 +58,15 @@ class Office:
     def close_position(self, position_id: int) -> dict:
         return self.post(f"/positions/{int(position_id)}/close")
 
-    def place_order(self, intent: str, price: float, size: float | None = None, side: str | None = None,
+    def place_order(self, intent: str, price=None, size: float | None = None, side: str | None = None,
                     position_id: int | None = None, post_only: bool = True, ttl_minutes: int | None = None,
-                    strategy_version: str | None = None) -> dict:
+                    strategy_version: str | None = None, order_type: str = "limit", trigger_price: float | None = None,
+                    trigger_signal: str = "mark", reduce_only: bool = False, oco: str | None = None) -> dict:
         return self.post("/orders", {"intent": intent, "price": price, "size": size, "side": side,
                                      "position_id": position_id, "post_only": post_only, "ttl_minutes": ttl_minutes,
-                                     "strategy_version": strategy_version})
+                                     "strategy_version": strategy_version, "order_type": order_type,
+                                     "trigger_price": trigger_price, "trigger_signal": trigger_signal,
+                                     "reduce_only": reduce_only, "oco": oco})
 
     def cancel_order(self, order_id: int) -> dict:
         return self.post(f"/orders/{int(order_id)}/cancel")

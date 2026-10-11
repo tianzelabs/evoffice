@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS positions (
 CREATE INDEX IF NOT EXISTS idx_positions_open ON positions(closed_ts);
 CREATE INDEX IF NOT EXISTS idx_positions_employee ON positions(employee_id);
 
--- Limit orders: resting in the (simulated) book until the market trades THROUGH their price.
+-- Orders, Kraken Futures order types (2026-10-11; see server/orders.py). The v1 table (limit only,
+-- trade-through fills) is kept as orders_v1 by the migration in store.py.
 CREATE TABLE IF NOT EXISTS orders (
     id               INTEGER PRIMARY KEY,
     employee_id      TEXT NOT NULL REFERENCES employees(id),
@@ -51,15 +52,23 @@ CREATE TABLE IF NOT EXISTS orders (
     side             TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
     position_side    TEXT CHECK (position_side IN ('long', 'short')),
     size             REAL NOT NULL CHECK (size > 0),
-    price            REAL NOT NULL,
+    filled           REAL NOT NULL DEFAULT 0,
+    price            REAL,                 -- limit price; NULL for a stop/take-profit that executes at market
+    order_type       TEXT NOT NULL DEFAULT 'limit' CHECK (order_type IN ('limit', 'ioc', 'stop', 'take_profit')),
+    trigger_price    REAL,
+    trigger_signal   TEXT CHECK (trigger_signal IN ('mark', 'last', 'index')),
+    reduce_only      INTEGER NOT NULL DEFAULT 0,
     post_only        INTEGER NOT NULL DEFAULT 1,
-    status           TEXT NOT NULL CHECK (status IN ('open', 'filled', 'cancelled', 'expired', 'rejected')),
+    oco              TEXT,
+    queue_ahead      REAL,                 -- size displayed ahead of us at our price when we joined; NULL = unknown
+    queue_seen       REAL NOT NULL DEFAULT 0,
+    status           TEXT NOT NULL CHECK (status IN ('open', 'untriggered', 'filled', 'cancelled', 'expired', 'rejected')),
     placed_ts        TEXT NOT NULL,
     placed_epoch     REAL NOT NULL,
-    expires_epoch    REAL,
+    expires_epoch    REAL,                 -- NULL: good till cancelled
     checked_epoch    REAL NOT NULL,
     done_ts          TEXT,
-    fill_price       REAL,
+    fill_price       REAL,                 -- average over partial fills
     liquidity        TEXT,
     strategy_version TEXT,
     note             TEXT

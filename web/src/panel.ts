@@ -31,9 +31,11 @@ function line(e: OfficeEvent): string | null {
     case "open": return `<span class="sys">${a} opened #${p.position} ${p.side} ${p.size} @ ${p.entry_px}${p.liquidity ? ` (${p.liquidity}, fee ${p.fee})` : ""}</span>`;
     case "close": return `<span class="sys">${a} closed #${p.position} (${p.reason}${p.liquidity ? ", " + p.liquidity : ""}) · net <span class="${p.pnl >= 0 ? "pos" : "neg"}">${p.pnl} (${p.pnl_bps} bps)</span>${p.funding ? ` incl. funding ${p.funding}` : ""}</span>`;
     case "order": {
-      const what = p.status === "placed" ? `placed a ${p.post_only ? "post-only " : ""}limit ${p.side} ${p.size} @ ${p.price} (${p.intent})`
+      const what = p.status === "placed" ? `placed a ${p.post_only ? "post-only " : ""}${p.type ?? "limit"} ${p.side} ${p.size} @ ${p.price} (${p.intent})`
         : p.status === "filled" ? `limit ${p.side} @ ${p.price} FILLED as ${p.liquidity}`
         : p.status === "rejected" ? `limit ${p.side} @ ${p.price} rejected: ${esc(p.why ?? "")}`
+        : p.status === "partial" ? `${p.type ?? "limit"} ${p.side} @ ${p.fill_price} part-filled ${p.qty} (${p.filled}/${p.size}, ${p.liquidity})`
+        : p.status === "triggered" ? `<b>${p.type} ${p.side} TRIGGERED</b> at ${p.trigger}`
         : `limit ${p.side} @ ${p.price} ${p.status}`;
       return `<span class="sys">${a} ${what}</span>`;
     }

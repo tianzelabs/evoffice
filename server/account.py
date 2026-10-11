@@ -8,8 +8,8 @@ stops forcing exits; what bounds the trader is what bounds a real Kraken account
 - Kraken EU retail (the "europa" schedule for PF_XBTUSD, read from Kraken's instruments API on
   2026-10-11; the boss trades from Budapest): INITIAL margin 10% of notional -- at most 10x --
   and MAINTENANCE margin 5%. A new position, or more of one, must fit the initial margin.
-- When equity falls below the maintenance margin, the office liquidates at market (taker), as
-  Kraken does. Kraken's own liquidation fee is NOT modelled (so this errs on the kind side).
+- Below maintenance margin: Kraken's Equity Protection Process -- partial liquidation in 10% steps,
+  then full liquidation with its fee (see liquidate_if_needed).
 - An account with (nearly) nothing left is BLOWN: no new positions until the boss starts a new one.
 """
 from __future__ import annotations
@@ -17,12 +17,16 @@ from __future__ import annotations
 import json
 import os
 
+from . import fees
 from .store import Store, now
+import math
 
 START_EQUITY = float(os.environ.get("OFFICE_START_EQUITY", "100"))
 IM = float(os.environ.get("OFFICE_INITIAL_MARGIN", "0.10"))
 MM = float(os.environ.get("OFFICE_MAINTENANCE_MARGIN", "0.05"))
 BLOWN_BELOW = 1.0
+LIQ_RATIO = 0.7          # liquidation margin = 70% of maintenance (Kraken Liquidation FAQ)
+FULL_LIQ_FEE = 0.005     # half of PF_XBTUSD's minimum maintenance margin (1%), per Kraken's EPP
 GOAL_MULTIPLE = 2.0
 
 
@@ -83,28 +87,67 @@ def check(store: Store, net_after_btc: float, price: float):
 
 
 def liquidate_if_needed(store: Store, market) -> list[int]:
-    """Kraken's liquidation: equity below maintenance margin -> the position is closed at market."""
+    """Kraken's Equity Protection Process for multi-collateral perpetuals (support.kraken.com, "Equity
+    Protection Process" and the EEA derivatives fee page, partial liquidation live since 2026-03-26):
+
+    1. equity below MAINTENANCE margin but at or above the LIQUIDATION margin (LIQ_RATIO x maintenance):
+       PARTIAL liquidation -- the position is cut in 10% steps at market (taker fee) until equity is back
+       above maintenance. Each step also pays the partial-liquidation fee: (fill price capped at the
+       mark - the zero-equity price) x quantity.
+    2. equity below the liquidation margin: FULL liquidation at market (taker fee) plus the full
+       liquidation fee, half the contract's minimum maintenance margin -- 0.5% of notional for
+       PF_XBTUSD -- never more than what is left: the trader keeps any excess.
+    3. a fill beyond the zero-equity price leaves nothing; the deficit is the insurance fund's (equity 0).
+    """
     from . import positions
-    if not store.q("SELECT 1 FROM positions WHERE closed_ts IS NULL"):
+    rows = store.q("SELECT * FROM positions WHERE closed_ts IS NULL")
+    if not rows:
         return []
     try:
-        q = market.quote(positions.PRODUCT)
+        mark = market.quote(positions.PRODUCT).mark
     except Exception:
         return []
-    s = state(store, q.mark)
-    if s["equity"] >= s["maintenance_margin"]:
-        return []
-    closed = []
-    for p in store.q("SELECT id FROM positions WHERE closed_ts IS NULL"):
+    emp = store.employee(rows[0]["employee_id"])
+    acted, steps = [], 0
+    # Kraken continues "until equity is restored above maintenance or the position is fully closed"; the
+    # 10% slices shrink geometrically, so this ends. NOTE: by Kraken's partial-liquidation fee formula a
+    # slice's fee is its share of the remaining equity, so equity/notional does not improve and a small,
+    # flat-margin account is in effect wound down step by step. Being liquidated costs nearly everything.
+    while steps < 500:
+        s = state(store, mark)
+        net = s["net_btc"]
+        if abs(net) < 1e-9 or s["equity"] >= s["maintenance_margin"]:
+            break
+        d = 1 if net > 0 else -1
+        size = abs(net)
+        zep = mark - d * s["equity"] / size                   # where equity would be exactly zero
+        full = s["equity"] < LIQ_RATIO * s["maintenance_margin"]
+        qty = size if full else max(positions.SIZE_STEP, math.floor(size * 0.10 / positions.SIZE_STEP) * positions.SIZE_STEP)
+        qty = min(qty, size)
+        taking = "sell" if d > 0 else "buy"
         try:
-            positions.close_position(store, market, p["id"], actor="office", reason="liquidation")
-            closed.append(p["id"])
+            fill_px = positions.market_price(market, taking, qty)
         except positions.Refused:
-            pass
-    after = state(store, q.mark)
-    store.emit("office", "account", {"phase": "liquidation", "positions": closed, "equity_before": s["equity"],
-                                     "maintenance_margin": s["maintenance_margin"], "equity_after": after["equity"],
-                                     "at": now()})
-    if after["equity"] < BLOWN_BELOW:
-        store.emit("office", "account", {"phase": "blown", "equity": after["equity"], "at": now()})
-    return closed
+            break                                              # no book: try again on the next pass
+        taker = qty * fill_px * fees.TAKER
+        if full:
+            left = s["equity"] + d * (fill_px - mark) * size - taker
+            fee = min(FULL_LIQ_FEE * qty * fill_px, max(left, 0.0))
+        else:
+            capped = min(fill_px, mark) if d > 0 else max(fill_px, mark)
+            fee = max(0.0, d * (capped - zep)) * qty
+        positions.fill(store, emp, positions.PRODUCT, "short" if d > 0 else "long", round(qty, 8), fill_px, "taker",
+                       None, None, "full liquidation" if full else "partial liquidation", "liquidation", fee)
+        after = state(store, mark)
+        store.emit("office", "account", {"phase": "liquidation", "kind": "full" if full else "partial",
+                                         "qty": round(qty, 8), "fill_px": round(fill_px, 2), "fee": round(fee, 4),
+                                         "zero_equity_px": round(zep, 2), "equity_before": s["equity"],
+                                         "maintenance_margin": s["maintenance_margin"],
+                                         "equity_after": after["equity"], "at": now()})
+        acted.append(steps)
+        steps += 1
+        if full:
+            break
+    if acted and state(store, mark)["equity"] < BLOWN_BELOW and abs(state(store, mark)["net_btc"]) < 1e-9:
+        store.emit("office", "account", {"phase": "blown", "equity": state(store, mark)["equity"], "at": now()})
+    return acted

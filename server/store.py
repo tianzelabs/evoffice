@@ -37,6 +37,14 @@ class Store:
                          ("funding", "REAL NOT NULL DEFAULT 0"), ("regime", "TEXT")):
             if col not in pcols:                       # Kraken futures fills (2026-10-10); old rows stay as they were
                 self.x(f"ALTER TABLE positions ADD COLUMN {col} {ddl}")
+        # 2026-10-11: Kraken order types (server/orders.py) need a new orders table. The old one is kept,
+        # renamed orders_v1, and the schema script recreates orders (and its index) from scratch.
+        ocols = {r["name"] for r in self.q("PRAGMA table_info(orders)")}
+        if ocols and "order_type" not in ocols:
+            with self.lock:
+                self.conn.execute("DROP INDEX IF EXISTS idx_orders_open")
+                self.conn.execute("ALTER TABLE orders RENAME TO orders_v1")
+                self.conn.executescript(SCHEMA.read_text())
         # 2026-10-11: the account can be LIQUIDATED, a close reason the original CHECK did not allow.
         # SQLite cannot alter a CHECK, so the table is rebuilt once -- every row copied, indexes recreated.
         sql = self.q("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'positions'")[0]["sql"]

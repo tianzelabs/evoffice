@@ -154,9 +154,9 @@ class Runner:
         self.last_trigger_error = None
         self._catch_up_on_chat(1800 if fresh else 0)   # context always; "new" only for a fresh hire
         tools = {
-            "open_position": {"tool": self._open, "description": "open_position(side, size, max_hold_s=None): a MARKET order -- buys at the ask / sells at the bid, pays the taker fee (0.05%). side 'long'|'short', size in BTC. Returns the position or {'error': why}"},
+            "open_position": {"tool": self._open, "description": "open_position(side, size, max_hold_s=None): a MARKET order -- walks the book (asks for a buy, bids for a sell) at the volume-weighted price, pays the taker fee (0.05%). side 'long'|'short', size in BTC. Returns the position or {'error': why}"},
             "close_position": {"tool": self._close, "description": "close_position(position_id): a MARKET close (taker). Returns the closed position with net pnl, or {'error': why}"},
-            "place_order": {"tool": self._place, "description": "place_order(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60): a LIMIT order. intent 'open' (with side, size) or 'close' (with position_id). Rests in the book and pays the MAKER fee (0.02%) when the market trades through its price; post_only rejects it if it would fill at once. Price is a whole USD, or 'best' to join your side of the book as it is when the order arrives (bid for a buy, ask for a sell) -- use 'best' rather than a price read earlier, which may have moved."},
+            "place_order": {"tool": self._place, "description": "place_order(intent, price=None, size=None, side=None, position_id=None, post_only=True, ttl_minutes=None, order_type='limit', trigger_price=None, trigger_signal='mark', reduce_only=False, oco=None): Kraken order types. intent 'open' (side 'long'|'short', size) or 'close' (position_id; reduce-only; size optional for a partial close). order_type: 'limit' (good till cancelled unless ttl_minutes; rests in the queue behind the size shown at its price and fills as MAKER 0.02%, partially or fully; one that crosses fills at once as TAKER, unless post_only, which rejects it), 'ioc' (what crosses now, rest cancelled), 'stop' / 'take_profit' (wait until the trigger_signal -- 'mark' (default), 'last' or 'index' -- reaches trigger_price, then execute at market, or as a limit at price if given). oco='tag' links orders that cancel each other when one executes (a take-profit/stop bracket). price: whole USD, or 'best' to join your side of the book as it is on arrival. size: multiples of 0.0001 BTC."},
             "cancel_order": {"tool": self._cancel, "description": "cancel_order(order_id)"},
             "say": {"tool": self._say, "description": "say(text, to=None): speak in the office chat; everyone sees it"},
             "jev": {"tool": self._jev, "description": "jev(state, questions): Jev typed judgement; questions = {id: {'type': 'noul'|'choice'|'score', 'instructions': str, 'criteria': ...}}"},
@@ -169,7 +169,7 @@ class Runner:
         }
         self.tool_sigs = {"open_position": "(side, size, max_hold_s=None) [market, taker]",
                           "close_position": "(position_id) [market, taker]",
-                          "place_order": "(intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60) [limit, maker]",
+                          "place_order": "(intent, price=None, size=None, side=None, position_id=None, post_only=True, ttl_minutes=None, order_type='limit', trigger_price=None, trigger_signal='mark', reduce_only=False, oco=None) [limit/ioc/stop/take_profit]",
                           "cancel_order": "(order_id)",
                           "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)", "market_context": "(minutes)", "trade_review": "(position_id)",
                           "evaluate": "(code)", "backtest": "(code, data='train', days=30)", "set_name": "(name)"}
@@ -194,13 +194,15 @@ class Runner:
         except Refused as e:
             return {"error": str(e)}
 
-    def _place(self, intent, price, size=None, side=None, position_id=None, post_only=True, ttl_minutes=60):
+    def _place(self, intent, price=None, size=None, side=None, position_id=None, post_only=True, ttl_minutes=None,
+               order_type="limit", trigger_price=None, trigger_signal="mark", reduce_only=False, oco=None):
         try:
             v, _ = strategy_version(self.ns, mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs)))
             # "best"/"bid"/"ask" are resolved by the office against the book when the order arrives (found live:
             # float(price) here turned price="best" into a ValueError before the office ever saw it)
-            px = price if isinstance(price, str) else float(price)
-            r = self.office.place_order(intent, px, size, side, position_id, bool(post_only), ttl_minutes, v)
+            px = price if (price is None or isinstance(price, str)) else float(price)
+            r = self.office.place_order(intent, px, size, side, position_id, bool(post_only), ttl_minutes, v,
+                                        order_type, trigger_price, trigger_signal, bool(reduce_only), oco)
             self._refresh_positions()
             return r
         except Refused as e:
