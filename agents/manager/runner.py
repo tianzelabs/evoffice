@@ -23,7 +23,7 @@ import subprocess
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -183,6 +183,23 @@ Finish with a one-line summary of what you did as your final message.
 """
 
 
+def quota_reset(err: str | None) -> float | None:
+    """'You've hit your usage limit ... try again at 11:00 AM' -> the epoch of that time (UTC, the container's
+    clock), or an hour from now if no time is given. None if err is not a usage limit."""
+    if not err or "usage limit" not in err:
+        return None
+    import re
+    m = re.search(r"try again at (\d{1,2}:\d{2}\s*[AP]M)", err)
+    now = datetime.now(timezone.utc)
+    if not m:
+        return now.timestamp() + 3600
+    t = datetime.strptime(m.group(1).replace(" ", ""), "%I:%M%p")
+    at = now.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
+    if at <= now:
+        at = at.replace(day=at.day) + timedelta(days=1)
+    return at.timestamp() + 60
+
+
 def log(*a):
     print(datetime.now(timezone.utc).strftime("%H:%M:%S"), *a, flush=True)
 
@@ -299,6 +316,16 @@ class Manager:
         with open(STATE / "turns.jsonl", "a") as f:     # kept for evals (openevals) later
             f.write(json.dumps({**result, "prompt": prompt, "transcript": out["transcript"]},
                                ensure_ascii=False, default=str) + "\n")
+        limited = quota_reset(err)
+        if limited and report:
+            # Found live (2026-10-11): the ChatGPT plan's Codex quota ran out; every wake failed in 5 s, the
+            # failed turns marked the boss's message and four triggers as handled, and the room showed nothing.
+            # Now: say so, sleep until the reset, and keep the events for when the manager is back.
+            self.limited_until = limited
+            self.office.report("turn", result)
+            self.office.report("agent_state", {"state": "asleep", "why": "Codex usage limit of the shared ChatGPT "
+                               f"plan reached; back at {datetime.fromtimestamp(limited, timezone.utc):%H:%M} UTC"})
+            return result
         if report:
             self.office.report("turn", result)
             self.office.report("agent_state", {"state": "idle"})
@@ -371,6 +398,8 @@ class Manager:
         while True:
             time.sleep(60 - time.time() % 60 + 20)
             try:
+                if time.time() < getattr(self, "limited_until", 0):
+                    continue                                 # out of Codex quota: asleep until it resets
                 reason = self.wake_reason()
                 if not reason or time.time() - self.last_turn < MIN_GAP_S:
                     continue
