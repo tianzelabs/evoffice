@@ -147,12 +147,12 @@ def test_more_on_the_same_side_adds_at_an_average_entry_and_the_cap_is_on_the_ne
     m.prices["PF_XBTUSD"] = 80_100.0
     r = _open(c, "long", 0.003).json()
     assert r["size"] == pytest.approx(0.005) and r["entry_px"] == pytest.approx((0.002 * 80_000.5 + 0.003 * 80_100.5) / 0.005)
-    assert _open(c, "long", 0.001).status_code == 409                 # junior cap 0.005 on the NET position
+    assert _open(c, "long", 0.01).status_code == 409                  # margin: $100 at 10% holds <= 0.0125 BTC net
     assert _open(c, "short", 0.008).json()["netting"]["net_after"] == pytest.approx(-0.003)   # flips
 
 
 def test_resting_orders_count_toward_the_cap(office):
     c, *_ = office
-    assert place(c, intent="open", side="long", size=0.003, price=79_000).json()["status"] == "open"
-    assert place(c, intent="open", side="long", size=0.003, price=78_000).status_code == 409
-    assert place(c, intent="open", side="short", size=0.003, price=81_000).json()["status"] == "open"
+    assert place(c, intent="open", side="long", size=0.007, price=79_000).json()["status"] == "open"
+    assert place(c, intent="open", side="long", size=0.007, price=78_000).status_code == 409   # 0.014 BTC > margin
+    assert place(c, intent="open", side="short", size=0.007, price=81_000).json()["status"] == "open"

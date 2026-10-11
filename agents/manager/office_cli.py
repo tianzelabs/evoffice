@@ -7,6 +7,7 @@
     office activity TRADER [N]           a trader's turns, versions, evaluations, wake reasons
     office positions TRADER              a trader's positions
     office orders TRADER                 a trader's limit orders (resting, filled, cancelled)
+    office account                       the trading account: equity, margin, leverage, progress to the goal
     office objective                     your objective ladder (minus -> plus), computed by the office
     office golive TRADER                 the checklist for moving a trader to a real Kraken account
     office market [MINUTES]              BTC price and recent 1-minute bars
@@ -49,6 +50,7 @@ def main(argv: list[str]) -> str:
     p = sub.add_parser("positions"); p.add_argument("trader")
     od = sub.add_parser("orders"); od.add_argument("trader")
     sub.add_parser("objective")
+    sub.add_parser("account")
     gl = sub.add_parser("golive"); gl.add_argument("trader")
     rp = sub.add_parser("repl"); rp.add_argument("code", nargs="?"); rp.add_argument("-f", "--file")
     rp.add_argument("--wait", type=int, default=300)
@@ -75,6 +77,7 @@ def main(argv: list[str]) -> str:
     if args.cmd == "activity": return ops.trader_activity(o, args.trader, args.n)
     if args.cmd == "positions": return ops.trader_positions(o, args.trader)
     if args.cmd == "orders": return ops.trader_orders(o, args.trader)
+    if args.cmd == "account": return json.dumps(o.get("/account"), ensure_ascii=False)
     if args.cmd == "objective": return json.dumps(o.get("/objective"), ensure_ascii=False)
     if args.cmd == "golive": return ops.golive(o, args.trader)
     if args.cmd == "market": return ops.market(o, args.minutes)

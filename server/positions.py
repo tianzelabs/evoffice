@@ -22,12 +22,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from . import fees, progress, settlement
+from . import account, fees, progress, settlement
 from .market import PRODUCT, Stale
 from .store import Store, now
 
-DEFAULT_MAX_HOLD_S = 24 * 3600
-MAX_SIZE_BTC = 0.05
+DEFAULT_MAX_HOLD_S = 365 * 24 * 3600     # no forced exit by default (the boss, 2026-10-11); a manager may set one
+MAX_SIZE_BTC = 1200.0                    # Kraken's maxPositionSize for PF_XBTUSD; margin binds long before
 
 
 class Refused(Exception):
@@ -47,8 +47,10 @@ def net_size(store: Store, employee_id: str) -> float:
         "SELECT side, size FROM positions WHERE employee_id = ? AND closed_ts IS NULL", (employee_id,)))
 
 
-def check_open(store: Store, employee_id: str, pair: str, side: str, size: float, pending: float = 0.0) -> dict:
-    """`pending`: BTC already resting in open orders on the same side, which could fill too."""
+def check_open(store: Store, employee_id: str, pair: str, side: str, size: float, pending: float = 0.0,
+               price: float | None = None) -> dict:
+    """`pending`: BTC already resting in open orders on the same side, which could fill too.
+    Since 2026-10-11 size is bounded by the account's margin (server/account.py), not by level."""
     emp = store.employee(employee_id)
     if not emp or emp["role"] != "trader" or emp["fired_ts"]:
         raise Refused("only an employed trader can open a position")
@@ -56,17 +58,22 @@ def check_open(store: Store, employee_id: str, pair: str, side: str, size: float
         raise Refused(f"the office trades {PRODUCT} (Kraken BTC perpetual) only")
     if side not in ("long", "short"):
         raise Refused("side must be 'long' or 'short'")
-    level = progress.compute(store, employee_id)
-    cap = min(float(emp["params"].get("max_size", MAX_SIZE_BTC)), level["max_size"])
     if size <= 0:
         raise Refused("size must be > 0")
     net = net_size(store, employee_id)
     after = net + _sign(side) * (size + pending)
-    if abs(after) > cap + EPS and abs(after) > abs(net) - EPS:
-        raise Refused(f"this would take your net position to {round(after, 6)} BTC; the cap is {cap} BTC "
-                      f"(level {level['level']} {level['title']} allows {level['max_size']}; earn XP by validated "
-                      f"improvement to unlock more). Now: {round(net, 6)} BTC"
-                      + (f", plus {pending} BTC resting in orders on that side" if pending else ""))
+    if abs(after) <= abs(net) + EPS:
+        return emp                                   # reducing is always allowed
+    own = emp["params"].get("max_size")             # a limit the manager chose for itself, if any
+    if own and abs(after) > float(own) + EPS:
+        raise Refused(f"this would take the net position to {round(after, 6)} BTC; the manager's own limit is {own} BTC")
+    if abs(after) > MAX_SIZE_BTC:
+        raise Refused(f"Kraken's maximum position is {MAX_SIZE_BTC} BTC")
+    if price:
+        try:
+            account.check(store, after, price)
+        except ValueError as e:
+            raise Refused(str(e) + (f" (now {round(net, 6)} BTC, plus {pending} BTC resting on that side)" if pending else ""))
     return emp
 
 
@@ -147,11 +154,11 @@ def _open(store: Store, emp: dict, pair: str, side: str, size: float, price: flo
 def open_position(store: Store, market, employee_id: str, pair: str, side: str, size: float,
                   strategy_version: str | None = None, max_hold_s: int | None = None) -> dict:
     """A market order: buys at the ask, sells at the bid, pays the taker fee."""
-    emp = check_open(store, employee_id, pair, side, size)
     try:
-        q = market.quote(pair)
+        q = market.quote(pair if pair == PRODUCT else PRODUCT)
     except Stale as e:
         raise Refused(f"no fresh price, not filling: {e}") from e
+    emp = check_open(store, employee_id, pair, side, size, price=q.ask if side == "long" else q.bid)
     price = q.ask if side == "long" else q.bid
     out = fill(store, emp, pair, side, size, price, "taker", strategy_version, max_hold_s, "market")
     if out["netting"]["closed_positions"]:

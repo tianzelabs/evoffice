@@ -62,13 +62,14 @@ async function market() {
     if (["version", "evaluation", "close", "fire"].includes(e.kind)) refreshIterations().catch(() => {});
     if (["level", "badge", "evaluation", "close", "version", "spend", "name"].includes(e.kind)) careers();
     if (["award", "evaluation", "close", "version"].includes(e.kind)) season();
-    if (["backtest", "evaluation", "close"].includes(e.kind)) refreshObjective().catch(() => {});
+    if (["backtest", "evaluation", "close", "open", "account"].includes(e.kind)) refreshObjective().catch(() => {});
   });
   board(); market(); refreshBudget(); refreshIterations().catch(() => {}); careers(); season();
   refreshObjective().catch(() => {});
   setInterval(season, 120_000);
   setInterval(careers, 60_000);
   setInterval(market, 15_000);
+  setInterval(() => refreshObjective().catch(() => {}), 30_000);      // equity marks to market
   setInterval(board, 60_000);
 })();
 

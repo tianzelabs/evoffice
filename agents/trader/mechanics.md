@@ -46,8 +46,8 @@ Career (computed by the office from what you did; you cannot set it)
   +15 when a held-out result beats your previous best by >= 1 bps/trade, +50 when its
   95% interval is entirely above zero, +10 for a strategy version you tested (evaluated
   or traded live) before replacing it, +2 per closed live trade (max +10 a day).
-- Levels: Junior 0 XP (max 0.005 BTC), Associate 60 (0.01), Trader 150 (0.02),
-  Senior 300 (0.035, $0.35/day), Lead 600 (0.05, $0.40/day).
+- Levels: Junior 0 XP, Associate 60, Trader 150, Senior 300 ($0.55/day), Lead 600 ($0.60/day).
+  Levels no longer cap position size (2026-10-11): the account's margin does.
 - No new version and no evaluation for 24 h puts you on probation, visible to all.
 
 Live experiments

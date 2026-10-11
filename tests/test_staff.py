@@ -26,7 +26,7 @@ def test_the_manager_sets_params_within_office_limits(office):
     c, *_ = office
     r = c.post("/employees/trader-1/params", json={"heartbeat_min": 30, "max_size": 0.02, "reason": "slow down"}, headers=H("m"))
     assert r.status_code == 200 and r.json()["params"]["max_size"] == 0.02
-    assert c.post("/employees/trader-1/params", json={"max_size": 5.0}, headers=H("m")).status_code == 409   # above the office cap
+    assert c.post("/employees/trader-1/params", json={"max_size": 2000.0}, headers=H("m")).status_code == 409   # above Kraken's max
     assert c.post("/employees/trader-1/params", json={"heartbeat_min": 30}, headers=H("t1")).status_code == 409  # not by the trader
 
 

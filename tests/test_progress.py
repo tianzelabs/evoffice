@@ -22,12 +22,13 @@ def office(tmp_path, monkeypatch):
     return c, store
 
 
-def test_a_new_trader_is_a_junior_with_a_small_cap(office):
+def test_a_new_trader_is_a_junior_and_size_is_bounded_by_margin_not_level(office):
     c, _ = office
     p = c.get("/progress").json()["trader-1"]
-    assert (p["level"], p["title"], p["max_size"], p["xp"]) == (1, "Junior", 0.005, 0)
-    assert c.post("/positions/open", json={"side": "long", "size": 0.01}, headers=H).status_code == 409
-    assert c.post("/positions/open", json={"side": "long", "size": 0.005}, headers=H).status_code == 200
+    assert (p["level"], p["title"], p["xp"]) == (1, "Junior", 0)
+    # $100 of equity, 10% initial margin, BTC at 80,000: at most 0.0125 BTC
+    assert c.post("/positions/open", json={"side": "long", "size": 0.02}, headers=H).status_code == 409
+    assert c.post("/positions/open", json={"side": "long", "size": 0.01}, headers=H).status_code == 200
 
 
 def test_improvement_earns_xp_and_an_edge_earns_most(office):

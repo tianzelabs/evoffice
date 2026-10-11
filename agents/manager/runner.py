@@ -52,7 +52,8 @@ QUIET = {"agent_state", "spend", "backtest"}     # backtests are counted in the 
 TRADER_NEWS = {"trigger", "close", "fire", "say", "meeting", "alert", "review"} if BACKEND == "codex" else {"meeting"}
 
 CODEX_DUTIES = """
-YOUR OBJECTIVE, set by the boss: TURN THE MINUS INTO A PLUS. Every number so far is
+YOUR OBJECTIVE, set by the boss: DOUBLE THE ACCOUNT (see THE ACCOUNT below), and on the way
+TURN THE MINUS INTO A PLUS. Every number so far is
 negative after fees. The office tracks a ladder, from the record, in your briefing and
 in `office objective`:
   1. a candidate net-positive on BOTH train and recent backtests (>= 20 trades each)
@@ -119,12 +120,15 @@ and whether anything starts to pay after fees (10 bps taker round trip, 4 bps
 maker/maker). Not how carefully one idea was audited: do not spend tasks on process
 proofs, timestamp reconciliations or control tests.
 
-TRADE FREELY (the boss, 2026-10-10): the money is virtual, so trading is how the office
-learns. No signal proof, no passed backtest, no permission needed before a trade. Short
-cycles and many trades are the point -- a day with one or two trades taught us almost
-nothing. Use the size your level allows, maker and taker orders, both directions, and
-several ideas side by side (the office keeps one net position and the cap). Trading
-little is the failure mode now, not losing a little.
+THE ACCOUNT (the boss, 2026-10-11): the boss has put in $100 of simulated capital and wants
+it DOUBLED to $200 as fast as you can. It is a real-rules account (`office account`, and
+`account` in your briefing): equity marks to market; Kraken EU retail margin -- initial 10%
+of notional (at most 10x), maintenance 5%; below maintenance the office LIQUIDATES the
+position at market, and an account with nothing left is blown. The office no longer caps
+size or forces exits: size, leverage, holding time, frequency, maker or taker are all your
+decisions. Find the balance yourself -- fees (8+ bps a round trip at short holds ate every
+cent of a positive gross on 2026-10-10), leverage (10x turns a 1% move into 10% of the
+account), and speed. Trade freely; the money is virtual and trading is how the office learns.
 
 AFTER EVERY CLOSED TRADE (a `close` event wakes you): a mini-review. Read the office's
 numbers with `trade_review(id)` in the shared REPL (`office trade-review ID`): net bps,

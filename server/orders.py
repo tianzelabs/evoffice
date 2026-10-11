@@ -77,7 +77,11 @@ def place(store: Store, market, who: dict, intent: str, size: float | None, pric
         pending = store.q("SELECT COALESCE(SUM(size), 0) AS s FROM orders WHERE employee_id = ? AND status = 'open' "
                           "AND intent = 'open' AND side = ?", (who["id"], same))[0]["s"]
         try:
-            positions.check_open(store, who["id"], PRODUCT, side, float(size or 0), pending)
+            ref = market.quote(PRODUCT)
+            px = price if not isinstance(price, str) else (ref.bid if same == "buy" else ref.ask)
+            positions.check_open(store, who["id"], PRODUCT, side, float(size or 0), pending, price=px)
+        except Stale as e:
+            raise OrderRefused(f"no fresh book, not placing: {e}") from e
         except positions.Refused as e:
             raise OrderRefused(str(e)) from e
         book_side, pos_side, size = ("buy" if side == "long" else "sell"), side, float(size)
@@ -138,7 +142,7 @@ def _fill(store: Store, o: dict, price: float, liquidity: str):
         if o["intent"] == "open":
             emp = store.employee(o["employee_id"])
             try:      # the net position may have grown since the order was placed
-                positions.check_open(store, o["employee_id"], PRODUCT, o["position_side"], o["size"])
+                positions.check_open(store, o["employee_id"], PRODUCT, o["position_side"], o["size"], price=price)
             except positions.Refused as e:
                 store.x("UPDATE orders SET status = 'cancelled', done_ts = ?, note = ? WHERE id = ?",
                         (now(), f"not filled: {e}"[:300], o["id"]))

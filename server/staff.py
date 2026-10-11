@@ -18,7 +18,7 @@ from pathlib import Path
 from . import positions
 from .store import Store, now
 
-LIMITS = {"heartbeat_min": (5, 720), "max_size": (0.001, positions.MAX_SIZE_BTC), "max_hold_min": (1, 1440)}
+LIMITS = {"heartbeat_min": (5, 720), "max_size": (0.0001, positions.MAX_SIZE_BTC), "max_hold_min": (1, 525_600)}
 
 
 class StaffRefused(Exception):

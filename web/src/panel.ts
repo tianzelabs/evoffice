@@ -41,6 +41,9 @@ function line(e: OfficeEvent): string | null {
     case "task_result": return `<span class="sys">${a} task #${p.task} ${p.error ? `<span class="neg">failed: ${esc(p.error)}</span>` : "done"}${p.summary ? ": " + esc(String(p.summary).slice(0, 600)) : ""}</span>`;
     case "repl": return `<span class="sys">${a} ran ${p.lines} lines in the shared REPL</span>`;
     case "repl_result": return p.stderr && p.stderr.trim() ? `<span class="sys neg">shared REPL error (${esc(String(p.by ?? ""))}): ${esc(String(p.stderr).slice(-200))}</span>` : null;
+    case "account": return p.phase === "start" ? `<span class="sys"><b>New account: $${p.start_equity}</b> — goal $${p.goal}. ${esc(p.reason ?? "")}</span>`
+      : p.phase === "liquidation" ? `<span class="neg"><b>LIQUIDATED</b>: equity ${p.equity_before} below maintenance ${p.maintenance_margin}; now ${p.equity_after}</span>`
+      : p.phase === "blown" ? `<span class="neg"><b>ACCOUNT BLOWN</b> (equity ${p.equity})</span>` : null;
     case "review": return `<span class="sys">— ${p.daily ? "end-of-day review" : "lookback review"}: what did we miss, and what came before it? —</span>`;
     case "trigger": return `<span class="sys">⚡ ${a} trigger: ${esc(p.text ?? "")}</span>`;
     case "hire": return `<span class="sys">${esc(p.employee)} joined as ${esc(p.role)}</span>`;
@@ -166,6 +169,10 @@ export async function refreshObjective() {
     if (r.rung === 3) return `best low ${fmt(b.best_interval_low_bps)} bps`;
     return `${b.last_trades} trades · ${fmt(b.net_usd)} USD · ${fmt(b.avg_net_bps)} bps`;
   };
-  $("#objective").innerHTML = `<table><tbody>${o.rungs.map((r: any) =>
+  const acc = o.account;
+  const accLine = acc ? `<div class="acct"><b>Account</b> $${acc.equity.toFixed(2)} → goal $${acc.goal.toFixed(0)} `
+    + `(${(acc.progress_to_goal * 100).toFixed(0)}%) · ${acc.net_btc ? `${acc.net_btc > 0 ? "long" : "short"} ${Math.abs(acc.net_btc)} BTC, ${acc.leverage}x` : "flat"}`
+    + `${acc.blown ? ' · <span class="neg">BLOWN</span>' : ""}</div>` : "";
+  $("#objective").innerHTML = accLine + `<table><tbody>${o.rungs.map((r: any) =>
     `<tr><td>${r.reached ? "✅" : r.rung === o.rung + 1 ? "▶" : "·"} ${r.rung}</td><td>${esc(r.goal)}<br><span class="muted">${best(r)}</span></td></tr>`).join("")}</tbody></table>`;
 }

@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import broker, fees, objective, tradereview, iterations, leaderboard, names, orders, positions, progress, scheduler, seasons, staff
+from . import account, broker, fees, objective, tradereview, iterations, leaderboard, names, orders, positions, progress, scheduler, seasons, staff
 from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import PRODUCT, FuturesMarket, Stale
@@ -115,6 +115,7 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             while True:
                 await asyncio.sleep(backstop_every_s)
                 await run_in_threadpool(positions.enforce_max_hold, store, market)
+                await run_in_threadpool(account.liquidate_if_needed, store, market)
                 await run_in_threadpool(scheduler.tick, store, market)      # stand-up and market alerts
         async def matcher():
             while True:                    # resting limit orders: filled when the market trades through them
@@ -231,10 +232,35 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
     def board():
         return leaderboard.standings(store)
 
+    @app.get("/account")
+    async def get_account():
+        """The trading account: equity at the mark, margin, leverage, distance to the boss's goal."""
+        try:
+            q = await run_in_threadpool(market.quote, PRODUCT)
+            mark = q.mark
+        except (Stale, ValueError):
+            mark = None
+        return account.state(store, mark)
+
+    @app.post("/account/start")
+    def start_account(body: dict, w: dict = Depends(who)):
+        """The boss funds a new account (after a blow-up, or to change the stake)."""
+        if w["role"] != "boss":
+            raise HTTPException(403, "only the boss funds the account")
+        try:
+            return account.start(store, float(body.get("equity", account.START_EQUITY)), w["id"],
+                                 str(body.get("reason", ""))[:300])
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+
     @app.get("/objective")
-    def get_objective():
-        """The manager's objective ladder: from minus to plus, computed from the record."""
-        return objective.compute(store)
+    async def get_objective():
+        """The boss's goal (double the account) first, then the evidence ladder, from the record."""
+        try:
+            mark = (await run_in_threadpool(market.quote, PRODUCT)).mark
+        except (Stale, ValueError):
+            mark = None
+        return {"account": account.state(store, mark), **objective.compute(store)}
 
     @app.get("/golive/{employee_id}")
     def golive(employee_id: str):

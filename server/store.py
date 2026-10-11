@@ -37,6 +37,25 @@ class Store:
                          ("funding", "REAL NOT NULL DEFAULT 0"), ("regime", "TEXT")):
             if col not in pcols:                       # Kraken futures fills (2026-10-10); old rows stay as they were
                 self.x(f"ALTER TABLE positions ADD COLUMN {col} {ddl}")
+        # 2026-10-11: the account can be LIQUIDATED, a close reason the original CHECK did not allow.
+        # SQLite cannot alter a CHECK, so the table is rebuilt once -- every row copied, indexes recreated.
+        sql = self.q("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'positions'")[0]["sql"]
+        if "'liquidation'" not in sql:
+            new = sql.replace("('self', 'max_hold', 'fired')", "('self', 'max_hold', 'fired', 'liquidation')")
+            new = new.replace("CREATE TABLE IF NOT EXISTS positions", "CREATE TABLE positions_new", 1).replace(
+                "CREATE TABLE positions (", "CREATE TABLE positions_new (", 1)
+            assert "positions_new" in new and "'liquidation'" in new, "unexpected positions DDL"
+            with self.lock:
+                n = self.conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+                self.conn.execute("BEGIN")
+                self.conn.execute(new)
+                self.conn.execute("INSERT INTO positions_new SELECT * FROM positions")
+                assert self.conn.execute("SELECT COUNT(*) FROM positions_new").fetchone()[0] == n
+                self.conn.execute("DROP TABLE positions")
+                self.conn.execute("ALTER TABLE positions_new RENAME TO positions")
+                self.conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_open ON positions(closed_ts)")
+                self.conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_employee ON positions(employee_id)")
+                self.conn.execute("COMMIT")
 
     def q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self.lock:

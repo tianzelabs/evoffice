@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS positions (
     max_hold_s       INTEGER NOT NULL,
     closed_ts        TEXT,
     exit_px          REAL,
-    close_reason     TEXT CHECK (close_reason IN ('self', 'max_hold', 'fired')),
+    close_reason     TEXT CHECK (close_reason IN ('self', 'max_hold', 'fired', 'liquidation')),
     fees             REAL,
     pnl              REAL,
     entry_liq        TEXT,                 -- 'maker' | 'taker' (NULL: legacy spot-4bps rows)

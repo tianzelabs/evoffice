@@ -564,7 +564,9 @@ class Runner:
         if not boss:
             self.chat_new = []        # colleagues' chat does not wake a tool-mode trader; chat_recent keeps it
         sw = self.ns.get("should_wake")
-        if callable(sw) and on_duty():
+        # The rules run around the clock (no model, no cost): a leveraged position must not sit
+        # unmanaged all night. Only waking the manager respects office hours.
+        if callable(sw):
             try:
                 self.refresh_for_rules()
                 fired = bool(sw(list(self.bars)))
@@ -577,7 +579,7 @@ class Runner:
                     self.office.report("trigger", {"text": f"should_wake raised {err}"})
                     self.last_trigger = time.time()
                 fired = False
-            if fired and time.time() - self.last_trigger >= TRIGGER_GAP_S:
+            if fired and on_duty() and time.time() - self.last_trigger >= TRIGGER_GAP_S:
                 px = self.bars[-1]["c"] if self.bars else None
                 self.office.report("trigger", {"text": f"should_wake(bars) returned True at {px}"})
                 self.last_trigger = time.time()
