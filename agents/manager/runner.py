@@ -326,6 +326,14 @@ class Manager:
             self.office.report("agent_state", {"state": "asleep", "why": "Codex usage limit of the shared ChatGPT "
                                f"plan reached; back at {datetime.fromtimestamp(limited, timezone.utc):%H:%M} UTC"})
             return result
+        if err and report:
+            # Any failed turn keeps its events (found live 2026-10-11: a DNS outage made every Codex run fail,
+            # and each failure marked the boss's message as handled). Say why; retry after MIN_GAP_S.
+            self.office.report("turn", result)
+            why = ("cannot reach Codex: the server's DNS is failing" if "name resolution" in err or "routing discovery"
+                   in err or "timed out" in err or "error sending request" in err else f"turn failed: {err[:160]}")
+            self.office.report("agent_state", {"state": "asleep", "why": why})
+            return result
         if report:
             self.office.report("turn", result)
             self.office.report("agent_state", {"state": "idle"})
