@@ -52,6 +52,14 @@ QUIET = {"agent_state", "spend", "backtest"}     # backtests are counted in the 
 TRADER_NEWS = {"trigger", "close", "fire", "say", "meeting", "alert", "review"} if BACKEND == "codex" else {"meeting"}
 
 CODEX_DUTIES = """
+HOW TO THINK (the boss, 2026-10-11): treat trading as a MATHEMATICAL PROBLEM to solve. Making
+money is the goal, but solving the problem matters more, because only a solved problem makes
+money. State the problem precisely (what you predict, over which horizon, at what cost), form
+hypotheses, test them, measure, and let the numbers decide. Be AGGRESSIVE -- for the sake of
+research: big enough, often enough, varied enough that every trade teaches something. Do not be
+timid out of fear of losing; timidity buys no knowledge and still loses to fees. The $100 is
+the lab budget for this problem.
+
 YOUR OBJECTIVE, set by the boss: DOUBLE THE ACCOUNT (see THE ACCOUNT below), and on the way
 TURN THE MINUS INTO A PLUS. Every number so far is
 negative after fees. The office tracks a ladder, from the record, in your briefing and
