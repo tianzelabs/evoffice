@@ -2,6 +2,8 @@
 
 **A gamified pixel office inside Eye of God for studying AI collectives and recursive analytics.**
 
+![The Living Office cover](docs/office-cover.png)
+
 The office is a small, observable research environment: a manager, one or more
 RLM (Recursive Language Model) workers, and a human boss share one public room.
 Agents research, act, explain themselves, test changes on held-out data, and earn
