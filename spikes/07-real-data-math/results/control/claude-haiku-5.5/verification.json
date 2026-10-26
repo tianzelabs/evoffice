@@ -1,0 +1,86 @@
+{
+  "task": "control",
+  "model": "claude-haiku-5.5",
+  "status": {
+    "model": "anthropic/claude-haiku-5.5",
+    "task": "control",
+    "completed": true,
+    "max_tokens": 32768,
+    "reasoning": {
+      "enabled": true
+    },
+    "finish_reason": "stop",
+    "cost_usd": 0.0052216,
+    "api_seconds": 35.01333300101396,
+    "tool_calls": 3,
+    "tool_errors": 0
+  },
+  "source_folder": "results/control/claude-haiku-5.5",
+  "source_kind": "final_submission",
+  "verification": {
+    "cases": 20,
+    "passed": 20,
+    "failures": [],
+    "oracle": "Reference table plus exhaustive action/state recursion at horizons <=3"
+  },
+  "verified_empirical": {
+    "frozen_train_fit": {
+      "mus": [
+        -0.07543585957985836,
+        -0.050408087749645315
+      ],
+      "variances": [
+        23.25349659768655,
+        20.32103825469423
+      ],
+      "transition": [
+        [
+          0.49691991786447637,
+          0.5030800821355236
+        ],
+        [
+          0.4914971657219073,
+          0.5085028342780927
+        ]
+      ],
+      "transition_counts": [
+        [
+          1452,
+          1470
+        ],
+        [
+          1474,
+          1525
+        ]
+      ]
+    },
+    "values_15": [
+      [
+        -5.0,
+        -5.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        -5.0,
+        -5.0
+      ]
+    ],
+    "actions_15": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ]
+  }
+}

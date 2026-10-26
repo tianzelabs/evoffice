@@ -1,0 +1,70 @@
+{
+  "elapsed_seconds": 6.022658832996967,
+  "transport_returncode": 0,
+  "response": {
+    "id": "gen-1791837345-r9dSCvdD3VLscYYxj2pD",
+    "object": "chat.completion",
+    "created": 1791837345,
+    "model": "anthropic/claude-haiku-5.5",
+    "provider": "Claude Platform on AWS",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "native_finish_reason": "tool_use",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "refusal": null,
+          "reasoning": "Since the threshold of 10 bps dominates the small mhat values, zero trades get triggered under the robust rule, and the validation mhat never exceeds that bound. The prediction MSE comes out slightly worse than the zero baseline, 2.8099 vs 2.8038, and I note the 99.9% nominal coverage reflects a prediction interval for y sized by the estimated uncertainty.\n\nResidual diagnostics check out fine: SSE/(n-2) with n=5921, lag-1 residual correlation near 0.0003, and x/y variance look reasonable. I could run one more quick check to find the max |mhat| on validation and compare it against the required edge threshold to quantify the margin, but I'll keep it brief given limited remaining budget.",
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "toolu_01XkiF4Bjfa1C3SLdCJuM6fn",
+              "function": {
+                "name": "python",
+                "arguments": "{\"code\": \"\\nprint(\\\"max|mhat| val\\\",np.max(np.abs(mh_v)),\\\"min(u+k) needed\\\",k+hw.min(), \\\"max edge\\\", np.max(np.abs(mh_v)-hw-k))\\n\"}"
+              }
+            }
+          ],
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "text": "Since the threshold of 10 bps dominates the small mhat values, zero trades get triggered under the robust rule, and the validation mhat never exceeds that bound. The prediction MSE comes out slightly worse than the zero baseline, 2.8099 vs 2.8038, and I note the 99.9% nominal coverage reflects a prediction interval for y sized by the estimated uncertainty.\n\nResidual diagnostics check out fine: SSE/(n-2) with n=5921, lag-1 residual correlation near 0.0003, and x/y variance look reasonable. I could run one more quick check to find the max |mhat| on validation and compare it against the required edge threshold to quantify the margin, but I'll keep it brief given limited remaining budget.",
+              "format": "anthropic-claude-v1",
+              "index": 0,
+              "signature": "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.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1oYWlrdS01LjUtMjAyNjEwMDd8Y2xhdWRlLW9uLWF3cyJ9"
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5704,
+      "completion_tokens": 484,
+      "total_tokens": 6188,
+      "cost": 0.0008124,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0008124,
+        "upstream_inference_prompt_cost": 0.0005704,
+        "upstream_inference_completions_cost": 0.000242
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 369,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  }
+}

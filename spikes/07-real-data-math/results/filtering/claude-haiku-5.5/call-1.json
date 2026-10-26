@@ -1,0 +1,70 @@
+{
+  "elapsed_seconds": 4.625577209008043,
+  "transport_returncode": 0,
+  "response": {
+    "id": "gen-1791837261-UxgMUFxNfoChrgAAMjki",
+    "object": "chat.completion",
+    "created": 1791837261,
+    "model": "anthropic/claude-haiku-5.5",
+    "provider": "Claude Platform on AWS",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "native_finish_reason": "tool_use",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "refusal": null,
+          "reasoning": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "toolu_01XJ6YQxcJSoyDU1sXYPRfJj",
+              "function": {
+                "name": "python",
+                "arguments": "{\"code\": \"\\nimport numpy as np, pandas as pd\\nprint(frame.shape, train.shape, validation.shape)\\nprint(frame.columns.tolist()[:20])\\nprint(pairs_validation.columns.tolist())\\nprint(frame[['m','segment','partition','r_bps']].head(3))\\nprint(frame.partition.value_counts())\\n\"}"
+              }
+            },
+            {
+              "type": "function",
+              "index": 1,
+              "id": "toolu_01967rRZvrdqZeJQya4WVh4i",
+              "function": {
+                "name": "python",
+                "arguments": "{\"code\": \"\\nphi=0.95; Q=0.04\\nR=float(train['r_bps'].dropna().var(ddof=1))\\nprint(\\\"R\\\",R, train['r_bps'].dropna().shape)\\n\\ndef kalman_filter(returns, phi, q, r, m0=0.0, p0=None):\\n    n=len(returns)\\n    if p0 is None: p0=q/(1-phi**2)\\n    pred_mean=[0.0]*n; pred_var=[0.0]*n; post_mean=[0.0]*n; post_var=[0.0]*n\\n    m=float(m0); p=float(p0)\\n    for i,y in enumerate(returns):\\n        # prior for latent mu_i is (m,p)\\n        pm=m; pv=p+r\\n        pred_mean[i]=pm; pred_var[i]=pv\\n        if y is None or (isinstance(y,float) and np.isnan(y)):\\n            # missing: no update; propagate\\n            mp=m; pp=p\\n        else:\\n            k=p/(p+r)\\n            mp=m+k*(float(y)-m); pp=p-k*p  # posterior\\n            pp=(1-k)*p\\n        m=phi*mp; p=phi*phi*pp+q\\n        post_mean[i]=mp; post_var[i]=pp\\n    return dict(pred_mean=pred_mean,pred_var=pred_var,post_mean=post_mean,post_var=post_var)\\n\\n# run per segment\\ndef run_segments(df):\\n    out_pm=[];out_pv=[];out_y=[];out_part=[];out_idx=[]\\n    d=df.reset_index(drop=True)\\n    seg=d['segment'].values\\n    for s in pd.unique(seg):\\n        sub=d[d['segment']==s]\\n        ret=sub['r_bps'].astype(float).values\\n        res=kalman_filter(list(ret),phi,Q,R)\\n        out_pm+=res['pred_mean']; out_pv+=res['pred_var']; out_y+=list(ret); out_part+=list(sub['partition'].values)\\n    return pd.DataFrame(dict(pm=out_pm,pv=out_pv,y=out_y,part=out_part))\\nprint(frame.segment.nunique(), frame['segment'].head().tolist())\\n\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 2578,
+      "completion_tokens": 921,
+      "total_tokens": 3499,
+      "cost": 0.0007183,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0007183,
+        "upstream_inference_prompt_cost": 0.0002578,
+        "upstream_inference_completions_cost": 0.0004605
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  }
+}

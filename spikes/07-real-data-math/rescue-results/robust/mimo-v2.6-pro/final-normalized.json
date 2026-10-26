@@ -1,0 +1,94 @@
+{
+  "derivation": "Payoff from flat, position a in [-1,1] held one minute: net = a*Y - k*|a|. Assume mu = E[Y|x] lies in the set [mhat-u, mhat+u], u>=0, and a fixed conditional variance v>0. Robust problem: max_{a in [-1,1]} min_{mu in [mhat-u,mhat+u]} F(a,mu), with F = a*mu - k*|a| - lam*a^2*v/2, lam>=0. Since a*mu is linear in mu, the inner minimum is attained at an endpoint: mu = mhat-u for a>=0, mu = mhat+u for a<=0. Define robust edges R+ = (mhat-u) - k (long) and R- = -(mhat+u) - k (short). Then for a>=0 the objective is a*R+ - lam*a^2*v/2, and for a<=0, writing b=-a>=0, it is b*R- - lam*b^2*v/2. Both branches are concave quadratics in the size. If R<=0 the branch maximum is 0 at size 0. If R>0 and c = lam*v > 0, unconstrained size is R/c, so constrained size bhat = min(R/c, 1) and branch value V(R) = R*bhat - c*bhat^2/2 = R^2/(2c) if R<=c, else R - c/2. Since F(0)=0, the maximizer is a* = +bhat(R+) if V(R+) > max(V(R-),0); a* = -bhat(R-) if V(R-) > max(V(R+),0); and a*=0 whenever both edges are <=0 or the two branch values tie exactly (no-trade tie: any zero-gross-edge threshold such as mhat-u-k=0 or mhat+u+k=0 gives a*=0, because strict positivity is required). Note R+ + R- = -2(u+k) <= 0, so at most one branch can be active; ties can only occur at value 0. lam=0 special case: the objective is linear in size, so the solution is bang-bang: a*=+1 if R+>0 and R+>R-, a*=-1 if R->0 and R->R+, else 0. Trade thresholds are mhat > u+k (long) or mhat < -(u+k) (short): the interval half-width u acts as an extra cost buffer; lam and v affect only the SIZE a = clip(R/(lam*v),0,1), not the sign threshold. With u=0 this reduces to a = clip((mhat-k)/(lam*v),0,1) on the long side. GUARANTEES: if the true conditional mean mu_true lies in [mhat-u,mhat+u] and v, k, lam are as specified, then F(a*,mu_true) >= min_mu F(a*,mu) = max_a min_mu F(a,mu) >= 0, i.e. the chosen a maximizes worst-case expected net over that set and never has negative worst-case expected net inside the set (flat gives exactly 0). NOT GUARANTEED: if mu_true lies outside the interval, the max-min guarantee disappears entirely; realized expected net a*mu_true - k|a*| can be arbitrarily negative and can be worse than flat, because the criterion only hedges the assumed set. Also not guaranteed: correctness of the linear mean model, of the calibration of u, of v (variance/tails/dependence), of k (spread, funding, impact, latency omitted), execution at bar close, any tail risk, or any pathwise/P&L bound. The interval is a pointwise 95% Student-t band for mu(x) under iid Gaussian homoskodastic exogenous errors with u(x) = t_(.975,n-2)*s*sqrt(1/n + (x-xbar)^2/Sxx), s^2 = SSE/(n-2); it is NOT a new-observation prediction interval, whose half-width is t_(.975,n-2)*s*sqrt(1 + 1/n + (x-xbar)^2/Sxx) (extra +1 in the variance for irreducible noise). Coverage of y by prediction intervals therefore measures observation calibration, not coverage of the unobserved conditional mean mu(x).",
+  "python": "import math\n\n\ndef robust_position(mhat, u, k, lam, v):\n    '''max_a min_{mu in [mhat-u, mhat+u]} { a*mu - k*|a| - lam*a^2*v/2 }, a in [-1,1].'''\n    mhat = float(mhat); u = float(u); k = float(k); lam = float(lam); v = float(v)\n    if not math.isfinite(mhat):\n        raise ValueError('mhat must be finite')\n    for name, val in (('u', u), ('k', k), ('lam', lam), ('v', v)):\n        if not math.isfinite(val):\n            raise ValueError(name + ' must be finite')\n    if u < 0:\n        raise ValueError('u must be >= 0')\n    if k < 0:\n        raise ValueError('k must be >= 0')\n    if lam < 0:\n        raise ValueError('lam must be >= 0')\n    if v <= 0:\n        raise ValueError('v must be > 0')\n\n    # Worst-case robust edges (interval endpoint minus round-trip cost).\n    R_long = mhat - u - k     # a > 0 branch, worst mu = mhat - u\n    R_short = -mhat - u - k   # a < 0 branch, worst mu = mhat + u\n\n    if lam == 0.0:\n        # Linear objective: bang-bang; strict positivity required; ties -> 0.\n        if R_long > 0.0 and R_long > R_short:\n            return 1.0\n        if R_short > 0.0 and R_short > R_long:\n            return -1.0\n        return 0.0\n\n    c = lam * v\n    cands = []\n    if R_long > 0.0:\n        size = min(R_long / c, 1.0)\n        cands.append((size * R_long - c * size * size / 2.0, size, 1))\n    if R_short > 0.0:\n        size = min(R_short / c, 1.0)\n        cands.append((size * R_short - c * size * size / 2.0, size, -1))\n    if not cands:\n        return 0.0\n    best = max(val for val, size, sign in cands)\n    if best <= 0.0:\n        return 0.0\n    winners = [cand for cand in cands if cand[0] == best]\n    if len(winners) > 1:          # exact no-trade tie between branches\n        return 0.0\n    val, size, sign = winners[0]\n    return float(sign * size)",
+  "empirical": {
+    "frozen_model": {
+      "feature": "x_bps (current 1-min return)",
+      "target": "y_bps (next 1-min return)",
+      "spec": "y_bps = beta0 + beta1*x_bps + error, ONE prespecified OLS on pairs_train",
+      "confidence": 0.95,
+      "lam": 0.04,
+      "k_bps_round_trip_fee_only": 10.0,
+      "v_used": "train residual variance s^2 = SSE/(n-2) = 21.763161"
+    },
+    "train": {
+      "n_pairs": 5921,
+      "beta0_bps": -0.063688,
+      "beta1": -0.015439,
+      "SSE": 128816.149,
+      "residual_variance_s2_bps2": 21.763161,
+      "residual_sd_s_bps": 4.6651,
+      "dof": 5919,
+      "R_squared": 0.000238,
+      "xbar_bps": -0.060151,
+      "Sxx": 128861.151,
+      "t_crit_0.975_5919": 1.960365,
+      "residual_lag1_corr_same_segment": 0.000292,
+      "adjacent_same_segment_pairs": 5910,
+      "durbin_watson": 1.9987
+    },
+    "intervals": {
+      "mean_interval_halfwidth_bps": {
+        "min": 0.1189,
+        "mean": 0.1257,
+        "max": 0.2639
+      },
+      "prediction_interval_halfwidth_bps": {
+        "min": 9.1461,
+        "mean": 9.1462,
+        "max": 9.1491
+      },
+      "note": "PI half-width is dominated by the additional +1 in sqrt(1 + 1/n + (x-xbar)^2/Sxx); the mean interval excludes it."
+    },
+    "validation": {
+      "n_pairs": 1775,
+      "prediction_MSE_bps2": 2.80993,
+      "zero_baseline_MSE_bps2": 2.803846,
+      "prediction_RMSE_bps": 1.6763,
+      "y_sd_bps": 1.6749,
+      "mhat_range_bps": [
+        -0.1789,
+        0.08
+      ],
+      "u_range_bps": [
+        0.1189,
+        0.2639
+      ],
+      "max_robust_long_edge_bps": -10.1573,
+      "max_robust_short_edge_bps": -10.0318,
+      "robust_trade_count": 0,
+      "max_abs_position": 0.0,
+      "mean_proxy_net_bps_per_validation_opportunity": 0.0,
+      "sum_proxy_net_bps": 0.0,
+      "interval_counts": {
+        "y_inside_95pct_POINTWISE_MEAN_interval": 248,
+        "fraction_y_inside_mean_interval": 0.1397,
+        "y_inside_95pct_PREDICTION_interval": 1774,
+        "fraction_y_inside_prediction_interval": 0.9994,
+        "expected_count_at_95pct_nominal": 1686.2
+      }
+    },
+    "formula_check": {
+      "method": "closed-form robust_position vs direct grid maximization (200001-point a-grid, min over the two mu endpoints) on 50 random validation points + 14 analytic edge/tie cases including lam=0",
+      "cases": 64,
+      "max_objective_difference": 0.0,
+      "tie_cases_returned_zero": [
+        "(10,0,10,0,1)",
+        "(-10,0,10,0,1)",
+        "(0,0,0,0,1)",
+        "(10,0,10,0.04,1)",
+        "(10.1,0.1,10,0,1)",
+        "(-10.1,0.1,10,0,1)"
+      ],
+      "lam0_sanity": {
+        "(5,0,0,0,1)": 1.0,
+        "(-5,0,0,0,1)": -1.0
+      },
+      "saturated_case_(30,0,10,0.04,1)": 1.0
+    },
+    "why_no_trades": "Every validation point has |mhat| <= 0.179 bps and u >= 0.119 bps, so |mhat| < u + k with k = 10 bps: the robust threshold mhat > u+k (long) or mhat < -(u+k) (short) is never met. Even setting k=0 diagnostically gives 0 trades, because the fitted signal lies inside its own uncertainty band; validation MSE (2.80993) is slightly worse than the zero baseline (2.80385).",
+    "interpretation_of_coverage_count": "1774/1775 = 99.94% of validation y fall inside the nominal 95% new-observation PREDICTION intervals. This is far above 95% because s is estimated from the training period (sd 4.665 bps) while validation y has sd only 1.675 bps, i.e. the variance regime shifted downward. It says nothing about coverage of the unobserved conditional mean mu(x): each y is one noisy draw mu(x)+eps, and prediction intervals are built to contain the draw, not the mean. Conversely, the narrow pointwise mean interval containing y only 13.97% of the time is not a failure of a mean interval, since y includes irreducible noise; the conditional mean is unobserved and its coverage cannot be measured from this data."
+  },
+  "limitations": "DEPENDENCE: iid errors are implausible for 1-minute crypto returns; volatility clustering (ARCH), heavy tails, jumps and diurnal effects are typical. The near-zero residual lag-1 correlation (0.000292, DW 1.9987) checks only first-order linear autocorrelation within contiguous segments and does not establish independence, homoskedasticity, Gaussianity, or absence of higher-order/conditional-heteroskedastic dependence. Additionally the pairs overlap mechanically: y_bps at t equals x_bps at t+1 within a segment, so the regressor is the previous response; strict exogeneity E[eps|x]=0 can fail under any autocorrelation or mean reversion, and s^2, t-based intervals and standard errors are then mis-calibrated. NONSTATIONARITY: one week, 141 segments, 171 missing minutes; train residual sd 4.665 bps vs validation y sd 1.675 bps is a large variance regime shift (prediction intervals over-cover at 99.94% and the risk penalty lam*v/2 is driven by the wrong regime); the slope is near zero with R^2 = 0.00024 and validation MSE is slightly worse than predicting zero, so there is no evidence of a stable linear signal. POINTWISE VS SELECTION/UNIFORM: u(x) is a pointwise 95% band for mu(x) at a FIXED x under the exact model; it is not a simultaneous band over 1,775 validation points (no uniform guarantee without Bonferroni/simultaneous bands), and using the band to decide whether to trade is data-dependent selection, after which the nominal 95% pointwise statement does not apply to the selected trades. x is stochastic here, while the standard formula conditions on fixed design. The robust guarantee covers only mu inside the assumed interval; if the true mean lies outside (model misspecification, structural break, unmodeled funding/spread effects), no bound on expected or realized net return holds and flat (a=0, net 0) can strictly beat any nonzero position. COSTS AND EXECUTION: k = 10 bps is a fee-only round-trip proxy (taker 5 bps each way); the training partition has zero microstructure observations, so spread and funding are unavailable, NOT zero; market impact, latency, queue position, borrow/short constraints and slippage are omitted. Touched bars cannot be used to infer maker fills, so maker execution must not be assumed. The proxy net PnL is not an executable result and not a total-cost bound; adding realistic spread/funding would only make trading harder here. The penalty uses a point estimate of v; mis-specified v distorts sizing (though not the sign threshold mhat vs u+k). The office 60-day evaluation window and the holdout partition were not accessed; no feature, horizon or confidence-level search was performed.",
+  "conclusion": "No evidence to trade. The prespecified OLS finds essentially no linear relation (beta1 = -0.0154, R^2 = 0.00024), validation MSE (2.8099 bps^2) is slightly worse than the zero baseline (2.8038 bps^2), and the robust max-min rule with k = 10 bps, lam = .04, v = 21.763 bps^2 abstains on all 1,775 validation opportunities (mean proxy net 0.000 bps per opportunity, zero on abstentions) because |mhat| never exceeds u + k; even at zero cost the fitted signal lies inside its own pointwise uncertainty band. The closed-form position was verified exactly against direct maximization, including lam = 0 and threshold ties (zero at ties). These are flat-out conclusions under implausible iid Gaussian homoskedastic exogenous errors for 1-minute crypto returns; the 99.94% prediction-interval coverage reflects a downward variance regime shift, not model skill, and cannot certify coverage of the unobserved conditional mean. If the true conditional mean falls outside [mhat-u, mhat+u], nothing is guaranteed; and fee-only costs omit spread, funding, impact and latency that are unavailable (not zero) in training. Stay flat."
+}

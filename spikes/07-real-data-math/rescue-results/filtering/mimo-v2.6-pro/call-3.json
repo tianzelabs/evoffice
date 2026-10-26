@@ -1,0 +1,63 @@
+{
+  "elapsed_seconds": 39.956731208003475,
+  "transport_returncode": 0,
+  "response": {
+    "id": "gen-1791837636-wDyw3acs0AitP6qX9Jt3",
+    "model": "xiaomi/mimo-v2.6-pro",
+    "provider": "Xiaomi",
+    "created": 1791837636,
+    "usage": {
+      "prompt_tokens": 6004,
+      "completion_tokens": 1648,
+      "total_tokens": 7652,
+      "cost": 0.0024993624,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 3584,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0024993624,
+        "upstream_inference_prompt_cost": 0.0010656024,
+        "upstream_inference_completions_cost": 0.00143376
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 670,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "reasoning": "All computed. Note interesting empirical facts:\n- Validation n = 1872, MSE = 2.77777, baseline = 2.76312 → filter is slightly worse than zero-mean baseline (MSE ratio > 1).\n- Coverage 99.95% — way above 95% because pred_var ≈ 22.1 (sd ≈ 4.7) while validation returns have variance2.76 (sd ≈ 1.66). Validation variance is far below train variance (21.73). So the predictive intervals are grossly too wide for validation data — coverage is not evidence of fit.\n- Latent stationary variance V = 0.41 vs R = 21.73 — tiny signal-to-noise, forecasts essentially 0.\n\nAlso note the empirical autocovariances: gamma1 ≈ -0.334 (negative) vs theory +0.39; gamma2 ≈ 0.634 vs theory 0.37. So data don't support phi=0.95 at all; empirical phi estimate = g2/g1 = -1.9, nonsensical.\n\nAlso worth noting: the first row of a segment in validation has a prediction of exactly 0.0 (m0=0) — like the 10:56:00 one with y=0.9648, pm=0.0 — that is the first nonmissing return after a gap.\n\nLet me quickly double-check a couple more things for the discussion: number of validation segments, whether one segment crosses train/val boundary (yes, 1 segment), and maybe compute the number of validation rows whose prediction is the reset prior. Also verify MSE difference and coverage count exactly. Also maybe compute empirical one-step error lag-1 autocorr = -0.029 — near zero, no residual predictability. Also compare: Kalman gain tiny (K = P/F ≈ 0.41/22.14 ≈ 0.0186), so post means update slowly; |pred_mean| stays small.\n\nActually, let me check one more derivation detail for the last five forecasts: first is 0.0 (reset). Also compute the exact coverage count: 1871/1872? cov = 0.999465811965812 → 1871/1872 exactly? 1871/1872 = 0.9994658... yes, so exactly one miss.\n\nLet me also compute a \"forecast sd vs validation sd\" ratio and maybe the number of validation rows starting segments. Also compute MSE breakdown: MSE at reset rows vs carried rows. Let me do one more call to gather a few extra numbers, then write the final answer.\n\nActually I have enough, but a few extra numbers would strengthen: count of validation rows that begin a segment (pred=0 reset), MSE excluding those, coverage with in-sample train, and check the derivative formulas symbolically. Let me do a compact call.",
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "text": "All computed. Note interesting empirical facts:\n- Validation n = 1872, MSE = 2.77777, baseline = 2.76312 → filter is slightly worse than zero-mean baseline (MSE ratio > 1).\n- Coverage 99.95% — way above 95% because pred_var ≈ 22.1 (sd ≈ 4.7) while validation returns have variance2.76 (sd ≈ 1.66). Validation variance is far below train variance (21.73). So the predictive intervals are grossly too wide for validation data — coverage is not evidence of fit.\n- Latent stationary variance V = 0.41 vs R = 21.73 — tiny signal-to-noise, forecasts essentially 0.\n\nAlso note the empirical autocovariances: gamma1 ≈ -0.334 (negative) vs theory +0.39; gamma2 ≈ 0.634 vs theory 0.37. So data don't support phi=0.95 at all; empirical phi estimate = g2/g1 = -1.9, nonsensical.\n\nAlso worth noting: the first row of a segment in validation has a prediction of exactly 0.0 (m0=0) — like the 10:56:00 one with y=0.9648, pm=0.0 — that is the first nonmissing return after a gap.\n\nLet me quickly double-check a couple more things for the discussion: number of validation segments, whether one segment crosses train/val boundary (yes, 1 segment), and maybe compute the number of validation rows whose prediction is the reset prior. Also verify MSE difference and coverage count exactly. Also maybe compute empirical one-step error lag-1 autocorr = -0.029 — near zero, no residual predictability. Also compare: Kalman gain tiny (K = P/F ≈ 0.41/22.14 ≈ 0.0186), so post means update slowly; |pred_mean| stays small.\n\nActually, let me check one more derivation detail for the last five forecasts: first is 0.0 (reset). Also compute the exact coverage count: 1871/1872? cov = 0.999465811965812 → 1871/1872 exactly? 1871/1872 = 0.9994658... yes, so exactly one miss.\n\nLet me also compute a \"forecast sd vs validation sd\" ratio and maybe the number of validation rows starting segments. Also compute MSE breakdown: MSE at reset rows vs carried rows. Let me do one more call to gather a few extra numbers, then write the final answer.\n\nActually I have enough, but a few extra numbers would strengthen: count of validation rows that begin a segment (pred=0 reset), MSE excluding those, coverage with in-sample train, and check the derivative formulas symbolically. Let me do a compact call.",
+              "format": "unknown",
+              "index": 0
+            }
+          ],
+          "tool_calls": [
+            {
+              "id": "call_75f490314f8449aeb436d608",
+              "type": "function",
+              "function": {
+                "name": "python",
+                "arguments": "{\"code\": \"import numpy as np, pandas as pd, math\\nphi, Q = 0.95, 0.04\\ntrain_r = frame.loc[(frame['partition']=='train') & frame['r_bps'].notna(),'r_bps'].to_numpy(float)\\nR = float(np.var(train_r, ddof=1)); V = Q/(1-phi*phi)\\n# redo filter records quickly (same code as before)\\ndef kalman_filter(returns, phi, q, r, m0=0.0, p0=None):\\n    if p0 is None: p0 = q/(1.0-phi*phi)\\n    pm,pv,qm,qv=[],[],[],[]; m,P=float(m0),float(p0)\\n    for y in returns:\\n        F=P+r; pm.append(m); pv.append(F); K=P/F\\n        mp=m+K*(float(y)-m); Pp=P-K*P; qm.append(mp); qv.append(Pp)\\n        m,P=phi*mp, phi*phi*Pp+q\\n    return pm,pv,qm,qv\\nf=frame.reset_index(drop=True); p0=Q/(1-phi*phi); rows=[]\\nfor seg,g in f.groupby('segment',sort=False):\\n    g=g.reset_index(drop=True); idx=g.index[g['r_bps'].notna()].to_numpy()\\n    if idx.size==0: continue\\n    y=g.loc[idx,'r_bps'].to_numpy(float); pm,pv,_,_=kalman_filter(y,phi,Q,R,0.0,p0)\\n    for j,i in enumerate(idx):\\n        rows.append((seg,i,g.loc[i,'partition'],y[j],pm[j],pv[j], j==0))\\nres=pd.DataFrame(rows,columns=['seg','i','part','y','pm','pv','first'])\\nval=res[res['part']=='validation'].reset_index(drop=True)\\nerr=val['y'].to_numpy()-val['pm'].to_numpy()\\ncov=np.mean(np.abs(err)<=1.959963984540054*np.sqrt(val['pv'].to_numpy()))\\nprint(\\\"coverage misses:\\\", int((np.abs(err)>1.959963984540054*np.sqrt(val['pv'].to_numpy())).sum()), \\\"of\\\", len(val))\\nprint(\\\"val segments:\\\", val['seg'].nunique(), \\\"reset rows in val:\\\", int(val['first'].sum()))\\ncarr=val[~val['first']]\\nprint(\\\"carried-only n:\\\", len(carr), \\\"MSE:\\\", float(np.mean((carr['y']-carr['pm'])**2)), \\\"base:\\\", float(np.mean(carr['y']**2)))\\nprint(\\\"rmse ratio MSE/base:\\\", 2.7777736506343405/2.7631208761448383)\\nprint(\\\"pred sd vs val sd:\\\", math.sqrt(val['pv'].mean()), math.sqrt(val['y'].var(ddof=1)))\\nprint(\\\"max |pred_mean| in val:\\\", float(np.abs(val['pm']).max()))\\nprint(\\\"gain at stationarity:\\\", V/(V+R))\\n# theoretical ACF\\nprint(\\\"theory rho1,rho2,rho3:\\\", V*phi/(V+R), V*phi**2/(V+R), V*phi**3/(V+R))\\n# empirical acf of train returns\\nx=pd.Series(train_r)\\nprint(\\\"emp acf1,2,3:\\\", round(float(x.autocorr(1)),4), round(float(x.autocorr(2)),4), round(float(x.autocorr(3)),4))\\n# phi=0 identifiability demonstration: same gamma0, different (Q,R)\\nprint(\\\"phi=0: gamma0 = Q+R only; example (Q,R)=(0.5,21.23) vs (0.04,21.69) both gamma0=21.73\\\")\\n# which segment crosses boundary\\nct=f.groupby('segment')['partition'].nunique(); print(\\\"boundary-crossing segments:\\\", list(ct[ct>1].index))\\n# train MSE too (in-sample sanity)\\ntr=res[res['part']=='train']\\nprint(\\\"train MSE:\\\", float(np.mean((tr['y']-tr['pm'])**2)), \\\"train base:\\\", float(np.mean(tr['y']**2)))\\nprint(\\\"R:\\\", R, \\\"V:\\\", V, \\\"F:\\\", V+R)\"}"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ]
+  },
+  "serving_rescue": "Official Xiaomi provider, streaming; task/data/token cap unchanged"
+}

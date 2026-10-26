@@ -1,0 +1,7 @@
+{
+  "utc": "2026-10-12T20:47:06.518765+00:00",
+  "change": "Added near-tie means 1e-11 to the control checker at the same four horizons",
+  "reason": "Observed candidate uses exact tuple comparison, while the task explicitly requires ties within 1e-10; check that requirement directly",
+  "feedback_to_models": false,
+  "data_or_strategy_changed": false
+}

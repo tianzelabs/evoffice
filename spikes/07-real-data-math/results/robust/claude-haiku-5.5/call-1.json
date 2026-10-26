@@ -1,0 +1,61 @@
+{
+  "elapsed_seconds": 1.6768922089977423,
+  "transport_returncode": 0,
+  "response": {
+    "id": "gen-1791837334-iR1onbgyAcrTxlpPAOfL",
+    "object": "chat.completion",
+    "created": 1791837334,
+    "model": "anthropic/claude-haiku-5.5",
+    "provider": "Claude Platform on AWS",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "native_finish_reason": "tool_use",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "refusal": null,
+          "reasoning": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "toolu_013oUrcTBvJZ2h9SiS7JtLLD",
+              "function": {
+                "name": "python",
+                "arguments": "{\"code\": \"\\nimport numpy as np, pandas as pd\\nprint(pairs_train.columns.tolist(), len(pairs_train), len(pairs_validation))\\nprint(pairs_train.head(3))\\nprint(manifest.keys() if isinstance(manifest,dict) else type(manifest))\\n\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 2756,
+      "completion_tokens": 126,
+      "total_tokens": 2882,
+      "cost": 0.0003386,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0003386,
+        "upstream_inference_prompt_cost": 0.0002756,
+        "upstream_inference_completions_cost": 6.3e-05
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "model": "xiaomi/mimo-v2.6-pro",
+  "task": "robust",
+  "completed": false,
+  "max_tokens": 32768,
+  "reasoning": {
+    "enabled": true
+  },
+  "finish_reason": "stop",
+  "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+  "cost_usd": 0.0208466706,
+  "api_seconds": 302.20854920901184,
+  "tool_calls": 3,
+  "tool_errors": 0,
+  "answer_recovered": true,
+  "normalization_artifact": "normalization.json",
+  "normalized_final": "final-normalized.json"
+}

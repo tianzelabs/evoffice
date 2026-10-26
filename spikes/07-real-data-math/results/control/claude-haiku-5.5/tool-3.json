@@ -1,0 +1,8 @@
+{
+  "code": "\nfound=[]\nfor n in range(1,H+1):\n    for pi,p in enumerate([-1,0,1]):\n        for z in range(2):\n            q=int(A[n,pi,z])\n            if p!=0 and q==p: found.append((n,p,z))\nprint(\"preserve-position cases:\",len(found))\n# compare: value of holding +1 vs flat-open decision, n=15\nfor z in range(2):\n    hold=1*mus[z]-lam*vs[z]/2-0+sum(T[z][z2]*V[14,2,z2] for z2 in range(2))\n    openv=1*mus[z]-lam*vs[z]/2-c+sum(T[z][z2]*V[14,2,z2] for z2 in range(2))\n    print(\"z\",z,\"q=+1 continuing from p=+1:\",round(hold,4),\" opening from flat:\",round(openv,4), \"V15 p=1 z\", V[15,2,z])\nprint(\"per-step edge mu-lam*var/2 long:\",[round(mus[z]-lam*vs[z]/2,3) for z in range(2)], \"short:\",[round(-mus[z]-lam*vs[z]/2,3) for z in range(2)])\nprint(\"MSE diff\", mse_model-mse_zero, \"R2-like\", 1-mse_model/mse_zero)\n",
+  "result": {
+    "ok": true,
+    "stdout": "preserve-position cases: 0\nz 0 q=+1 continuing from p=+1: -5.5405  opening from flat: -10.5405 V15 p=1 z -5.0\nz 1 q=+1 continuing from p=+1: -5.4568  opening from flat: -10.4568 V15 p=1 z -5.0\nper-step edge mu-lam*var/2 long: [-0.541, -0.457] short: [-0.39, -0.356]\nMSE diff 0.004990491434578637 R2-like -0.0017798737466943049\n",
+    "stderr": ""
+  }
+}

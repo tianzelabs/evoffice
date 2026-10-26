@@ -1,0 +1,16 @@
+{
+  "model": "xiaomi/mimo-v2.6-pro",
+  "task": "filtering",
+  "completed": false,
+  "max_tokens": 32768,
+  "reasoning": {
+    "enabled": true
+  },
+  "error": "RuntimeError: API transport failed; raw result saved, not retried",
+  "cost_usd": null,
+  "api_seconds": 600.0178133750014,
+  "tool_calls": 0,
+  "tool_errors": 0,
+  "cost_receipt_missing": true,
+  "max_cost_reserved_usd": 0.03192639
+}

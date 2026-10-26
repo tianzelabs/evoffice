@@ -1,0 +1,65 @@
+{
+  "task": "robust",
+  "model": "mimo-v2.6-pro",
+  "status": {
+    "model": "xiaomi/mimo-v2.6-pro",
+    "task": "robust",
+    "completed": false,
+    "max_tokens": 32768,
+    "reasoning": {
+      "enabled": true
+    },
+    "finish_reason": "stop",
+    "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+    "cost_usd": 0.0208466706,
+    "api_seconds": 302.20854920901184,
+    "tool_calls": 3,
+    "tool_errors": 0,
+    "answer_recovered": true,
+    "normalization_artifact": "normalization.json",
+    "normalized_final": "final-normalized.json"
+  },
+  "source_folder": "rescue-results/robust/mimo-v2.6-pro",
+  "source_kind": "final_submission",
+  "verification": {
+    "cases": 394,
+    "passed": 394,
+    "failures": [],
+    "oracle": "Exact objective maximum plus independent dense grid maximization"
+  },
+  "verified_empirical": {
+    "frozen_train_fit": {
+      "n": 5921,
+      "beta0": -0.06368788527483432,
+      "beta1": -0.015438661199384114,
+      "residual_variance": 21.763160831032902,
+      "xbar": -0.06015088865625939,
+      "sxx": 128861.15124332273,
+      "t_critical": 1.9603648543081267,
+      "residual_lag1_correlation": 0.0002923836678338144,
+      "residual_adjacent_pairs": 5910
+    },
+    "validation": {
+      "n": 1775,
+      "prediction_mse": 2.809930067087192,
+      "zero_baseline_mse": 2.8038457468387543,
+      "robust_trade_count": 0,
+      "mean_proxy_net_bps_per_opportunity": 0.0,
+      "nominal_prediction_interval_covered": 1774,
+      "max_abs_predicted_mean_bps": 0.17891703144992713,
+      "max_mean_interval_half_width_bps": 0.2638980657683591,
+      "k_fee_only_bps": 10.0
+    },
+    "holdout": {
+      "n": 1943,
+      "prediction_mse": 14.432376606303546,
+      "zero_baseline_mse": 14.425935343204122,
+      "robust_trade_count": 0,
+      "mean_proxy_net_bps_per_opportunity": 0.0,
+      "nominal_prediction_interval_covered": 1870,
+      "max_abs_predicted_mean_bps": 0.48908197388532465,
+      "max_mean_interval_half_width_bps": 0.7134713762148897,
+      "k_fee_only_bps": 10.0
+    }
+  }
+}

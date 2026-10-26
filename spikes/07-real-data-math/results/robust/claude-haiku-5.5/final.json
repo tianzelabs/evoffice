@@ -1,0 +1,38 @@
+{
+  "derivation": "Let f(a,mu)=a*mu-k|a|-lam*a^2*v/2 with a in [-1,1]. f is linear in mu, so the worst case over mu in [mhat-u, mhat+u] is attained at an endpoint: min_mu f = a*mhat - u|a| - k|a| - lam*v*a^2/2 (for a>0 the worst mu is mhat-u; for a<0 it is mhat+u). Hence the robust objective is g(a)=a*mhat-(u+k)|a|-lam*v*a^2/2. For a>0 the unconstrained maximiser is (mhat-u-k)/(lam*v); for a<0 it is (mhat+u+k)/(lam*v). Clipping to [-1,1] and choosing 0 when |mhat|<=u+k (no-trade tie) gives the closed form a*(mhat,u,k,lam,v) = sign(mhat)*min(1, max(0,|mhat|-u-k)/(lam*v)). For lam=0 the objective is linear: a=sign(mhat) if |mhat|>u+k, else 0 (tie → 0). Checked numerically against a dense grid maximisation over 400 random parameter draws (including lam=0): maximal shortfall of the formula versus the grid optimum was 0.0.",
+  "python": "import numpy as np\n\ndef robust_position(mhat, u, k, lam, v):\n    mhat, u, k, lam, v = float(mhat), float(u), float(k), float(lam), float(v)\n    if not all(np.isfinite([mhat, u, k, lam, v])):\n        raise ValueError('non-finite input')\n    if u < 0 or k < 0 or lam < 0 or v <= 0:\n        raise ValueError('need u>=0, k>=0, lam>=0, v>0')\n    edge = abs(mhat) - u - k\n    if edge <= 0:\n        return 0.0  # no-trade tie and inside-threshold region\n    s = 1.0 if mhat > 0 else -1.0\n    if lam == 0:\n        return s * 1.0\n    return s * min(1.0, edge / (lam * v))\n",
+  "empirical": {
+    "frozen_parameters": {
+      "lam": 0.04,
+      "k_round_trip_fee_only_bps": 10.0
+    },
+    "train": {
+      "n_pairs": 5921,
+      "beta0": -0.06368788527483434,
+      "beta1": -0.015438661199384121,
+      "residual_variance_SSE_over_n_minus_2": 21.763160831032902,
+      "t_crit_0.975_df_5919": 1.9603648543081267,
+      "slope_SE_homoskedastic": 0.0129957091258274,
+      "slope_t_stat": -1.1879814367883665,
+      "residual_lag1_corr_same_segment": 0.0002923836678338178
+    },
+    "validation": {
+      "n_pairs": 1775,
+      "prediction_MSE": 2.809930067087192,
+      "zero_baseline_MSE": 2.8038457468387543,
+      "corr(prediction,y)": 0.005879531682131662,
+      "max_abs_mhat": 0.17891703144992718,
+      "mean_CI_halfwidth_u(x)": 0.12568412912092122,
+      "max_CI_halfwidth_u(x)": 0.2638980657683591,
+      "robust_trade_count": 0,
+      "long_trades": 0,
+      "short_trades": 0,
+      "mean_proxy_net_bps_per_opportunity_(zeros_on_abstentions)": 0.0,
+      "nominal_Gaussian_95_PI_coverage_of_validation_y": 0.9994366197183099,
+      "nominal_Gaussian_95_PI_covering_count": 1774
+    },
+    "note_on_coverage": "The 1774/1775 count is for the Gaussian 95% PREDICTION interval for a new y (variance s^2(1+1/n+(x-xbar)^2/Sxx)). It is a check on the outcome-noise model, not on the conditional mean. The mean-interval half-width (~0.13 bps) is far narrower than the residual spread (~4.7 bps), so the mean interval is not what covers y; and y is never the unobserved conditional mean, so the mean interval's coverage cannot be measured from observed y alone."
+  },
+  "limitations": "(1) Interval validity: the t-interval for E[y|x] holds pointwise only under iid Gaussian, homoskedastic, exogenous errors with correct linear mean; none is checked. Heavy-tailed minute returns (residual variance ~21.8 bps^2 with fat tails) and volatility clustering violate homoskedasticity. (2) Dependence: lag-1 residual correlation is ~0 in the same segment, but this does not rule out higher-order or volatility-clustered dependence; the SEs are not HAC-corrected. (3) Nonstationarity: the slope was estimated on 2026-10-05 to 10-09 and applied to 10-09 to 10-11; regime shift is not tested. (4) Pointwise vs guarantees: the interval is pointwise at a given x; selecting trades when the interval excludes the threshold is a selection procedure, and no uniform or simultaneous coverage is claimed. If the true model lies outside [mhat-u, mhat+u], the worst-case bound is not guaranteed: the position's payoff is only protected for mu inside the set, and the derivation gives no bound on loss outside it. (5) Costs: k=10 bps is fee-only (round-trip maker/taker fee proxy); training spread and funding medians are null (unavailable, not zero), so the threshold omits spread, funding, impact, latency and queue effects. The proxy net PnL is not executable. (6) The zero trade count reflects that the cost threshold k=10 bps exceeds every validation |mhat| (max 0.18 bps) plus its interval half-width; this is a finding about the frozen setup, not a profit result. (7) Prediction MSE (2.8099) is marginally worse than the zero baseline (2.8038), with correlation 0.006 between prediction and y: there is no out-of-sample evidence of predictive value. (8) Holdout and the 60-day window were not accessed.",
+  "conclusion": "The robust rule is derived in closed form and verified against grid maximisation. Under the frozen setup (lam=0.04, fee-only k=10 bps), the one-minute linear regression on lagged-return features has essentially zero slope (beta1=-0.0154, t=-1.19), no residual autocorrelation, and no out-of-sample predictive improvement over zero (MSE 2.8099 vs 2.8038). The robust policy takes zero trades on validation, with mean proxy net 0 bps per opportunity. The evidence supports no trade: there is no evidence that this signal is profitable after even the fee-only cost, and the result should not be read as an executable or guaranteed-cost outcome."
+}

@@ -1,0 +1,20 @@
+{
+  "reason": "Default non-streaming route timed out after 600s without a usable answer or cost receipt",
+  "unchanged": [
+    "tasks",
+    "data",
+    "chronological split",
+    "reasoning enabled",
+    "32768 completion-token limit",
+    "four responses per session"
+  ],
+  "changed": [
+    "pin official Xiaomi provider",
+    "streaming transport",
+    "1200s transport timeout",
+    "omit tools on last response instead of unsupported tool_choice=none"
+  ],
+  "original_attempt_retained": "results/filtering/mimo-v2.6-pro/call-1.json",
+  "original_max_cost_reserved_usd": 0.03192639,
+  "total_experiment_cost_cap_usd": 1.0
+}

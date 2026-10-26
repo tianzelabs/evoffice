@@ -1,0 +1,8 @@
+{
+  "code": "\nimport numpy as np, pandas as pd\nprint(frame.shape, train.shape, validation.shape)\nprint(frame.columns.tolist()[:20])\nprint(pairs_validation.columns.tolist())\nprint(frame[['m','segment','partition','r_bps']].head(3))\nprint(frame.partition.value_counts())\n",
+  "result": {
+    "ok": true,
+    "stdout": "(7927, 20) (5945, 20) (1982, 20)\n['m', 'o', 'h', 'l', 'c', 'v', 'epoch', 'segment', 'partition', 'r_bps', 'taker_buy', 'taker_sell', 'flow_imb', 'trades', 'max_trade', 'spread', 'book_imb', 'basis_bps', 'funding_per_hour', 'open_interest']\n['m', 'target_m', 'epoch', 'target_epoch', 'segment', 'partition', 'x_bps', 'y_bps']\n                     m  segment partition     r_bps\n0  2026-10-05 20:23:00        1     train       NaN\n1  2026-10-05 20:24:00        1     train -0.116584\n2  2026-10-05 20:25:00        1     train  1.282440\npartition\ntrain         5945\nvalidation    1982\nName: count, dtype: int64\n",
+    "stderr": ""
+  }
+}

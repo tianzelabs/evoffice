@@ -1,0 +1,68 @@
+{
+  "frozen_at_utc": "2026-10-12T20:26:03.331623+00:00",
+  "source": "http://100.86.90.65:8710/market/context?minutes=10080",
+  "instrument": "Kraken Futures PF_XBTUSD",
+  "timestamps_timezone": "UTC",
+  "raw_sha256": "1b997e2807eee940fec5d51b98a41026f0545e442de3cdd8e8ad78b3db9f25a1",
+  "rows": 9909,
+  "first": "2026-10-05 20:23:00",
+  "last": "2026-10-12 20:22:00",
+  "missing_minutes": 171,
+  "contiguous_segments": 141,
+  "split_rule": "First 60% / next 20% / final 20% of rows, by time, before any model calls",
+  "partitions": {
+    "train": {
+      "bars": 5945,
+      "one_minute_returns": 5933,
+      "pairs": 5921,
+      "first": "2026-10-05 20:23:00",
+      "last": "2026-10-09 23:50:00"
+    },
+    "validation": {
+      "bars": 1982,
+      "one_minute_returns": 1872,
+      "pairs": 1775,
+      "first": "2026-10-09 23:51:00",
+      "last": "2026-10-11 11:00:00"
+    },
+    "holdout": {
+      "bars": 1982,
+      "one_minute_returns": 1963,
+      "pairs": 1943,
+      "first": "2026-10-11 11:01:00",
+      "last": "2026-10-12 20:22:00"
+    }
+  },
+  "nonmissing_fields": {
+    "basis_bps": 3441,
+    "book_imb": 3441,
+    "c": 9909,
+    "flow_imb": 3444,
+    "funding_per_hour": 3441,
+    "h": 9909,
+    "l": 9909,
+    "m": 9909,
+    "max_trade": 3444,
+    "o": 9909,
+    "open_interest": 2925,
+    "spread": 3441,
+    "taker_buy": 3444,
+    "taker_sell": 3444,
+    "trades": 3444,
+    "v": 9909
+  },
+  "fees": {
+    "regime": "kraken-futures-tier1",
+    "maker": 0.0002,
+    "taker": 0.0005
+  },
+  "fixed_cost_proxies_bps": {
+    "one_way_fee_only": 5.0,
+    "round_trip_fee_only": 10.0,
+    "train_median_full_spread": null,
+    "train_median_abs_one_minute_funding": null,
+    "microstructure_train_observations": 0
+  },
+  "cost_limitations": "Fee-only toy costs. Training partition predates microstructure capture: spread and funding estimates are unavailable, not zero. Do not borrow later observations to fit costs. Spread, funding, impact, latency, queue effects are omitted; no proxy net PnL is an executable result or a guaranteed total-cost bound. Never infer maker execution from a touched bar.",
+  "scope": "Only recent public research data; the office's separate 60-day evaluation window is not accessed."
+}

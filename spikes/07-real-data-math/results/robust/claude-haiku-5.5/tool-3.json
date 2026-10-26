@@ -1,0 +1,8 @@
+{
+  "code": "\nprint(\"max|mhat| val\",np.max(np.abs(mh_v)),\"min(u+k) needed\",k+hw.min(), \"max edge\", np.max(np.abs(mh_v)-hw-k))\n",
+  "result": {
+    "ok": true,
+    "stdout": "max|mhat| val 0.17891703144992718 min(u+k) needed 10.118860197826729 max edge -10.031781983316252\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "code": "\nphi=0.95; Q=0.04\nR=float(train['r_bps'].dropna().var(ddof=1))\nprint(\"R\",R, train['r_bps'].dropna().shape)\n\ndef kalman_filter(returns, phi, q, r, m0=0.0, p0=None):\n    n=len(returns)\n    if p0 is None: p0=q/(1-phi**2)\n    pred_mean=[0.0]*n; pred_var=[0.0]*n; post_mean=[0.0]*n; post_var=[0.0]*n\n    m=float(m0); p=float(p0)\n    for i,y in enumerate(returns):\n        # prior for latent mu_i is (m,p)\n        pm=m; pv=p+r\n        pred_mean[i]=pm; pred_var[i]=pv\n        if y is None or (isinstance(y,float) and np.isnan(y)):\n            # missing: no update; propagate\n            mp=m; pp=p\n        else:\n            k=p/(p+r)\n            mp=m+k*(float(y)-m); pp=p-k*p  # posterior\n            pp=(1-k)*p\n        m=phi*mp; p=phi*phi*pp+q\n        post_mean[i]=mp; post_var[i]=pp\n    return dict(pred_mean=pred_mean,pred_var=pred_var,post_mean=post_mean,post_var=post_var)\n\n# run per segment\ndef run_segments(df):\n    out_pm=[];out_pv=[];out_y=[];out_part=[];out_idx=[]\n    d=df.reset_index(drop=True)\n    seg=d['segment'].values\n    for s in pd.unique(seg):\n        sub=d[d['segment']==s]\n        ret=sub['r_bps'].astype(float).values\n        res=kalman_filter(list(ret),phi,Q,R)\n        out_pm+=res['pred_mean']; out_pv+=res['pred_var']; out_y+=list(ret); out_part+=list(sub['partition'].values)\n    return pd.DataFrame(dict(pm=out_pm,pv=out_pv,y=out_y,part=out_part))\nprint(frame.segment.nunique(), frame['segment'].head().tolist())\n",
+  "result": {
+    "ok": true,
+    "stdout": "R 21.728724563795655 (5933,)\n122 [1, 1, 1, 1, 1]\n",
+    "stderr": ""
+  }
+}

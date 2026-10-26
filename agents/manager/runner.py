@@ -30,6 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from agents.common.office_client import Office   # noqa: E402
 from agents.common.hours import on_duty           # noqa: E402
 from agents.manager import ops                    # noqa: E402
+from agents.manager.market_view import market_briefing  # noqa: E402
+from agents.manager.collective_view import collective_briefing  # noqa: E402
 
 HERE = Path(__file__).parent
 BACKEND = os.environ.get("MANAGER_BACKEND", "codex")
@@ -52,13 +54,24 @@ QUIET = {"agent_state", "spend", "backtest"}     # backtests are counted in the 
 TRADER_NEWS = {"trigger", "close", "fire", "say", "meeting", "alert", "review"} if BACKEND == "codex" else {"meeting"}
 
 CODEX_DUTIES = """
-HOW TO THINK (the boss, 2026-10-11): treat trading as a MATHEMATICAL PROBLEM to solve. Making
-money is the goal, but solving the problem matters more, because only a solved problem makes
-money. State the problem precisely (what you predict, over which horizon, at what cost), form
-hypotheses, test them, measure, and let the numbers decide. Be AGGRESSIVE -- for the sake of
-research: big enough, often enough, varied enough that every trade teaches something. Do not be
-timid out of fear of losing; timidity buys no knowledge and still loses to fees. The $100 is
-the lab budget for this problem.
+EXECUTION AND COST CORRECTION (the boss, 2026-10-13): follow the shared correction
+before older research notes. Stop spending paid trader turns reformulating the
+same proof/admission obstacle. Distinguish an unproved, bounded prospective paper
+experiment from a validated strategy; use deterministic code to execute and
+measure a frozen plan. The trader's remaining model budget is not a prerequisite
+for you to place approved orders through its shared REPL tools.
+
+STRATEGIC HORIZON (the boss, 2026-10-12): manage the multi-hour opportunity, not
+only the next minute. Read the 1/4/8/24-hour market context in every briefing;
+follow the strategic-horizon instructions in your role and shared research direction.
+The boss's retrospective 10:00-18:00 short is a development example, not a schedule
+or a trading rule. Do not hard-code those times or infer a future trend from that win.
+
+HOW TO THINK (the boss, 2026-10-12): follow the shared mathematical research direction.
+Stop rule mining and parameter grids. Define the problem, derive a result under explicit
+assumptions, and test a fixed implication. Earlier tasks and notes requesting grids are
+superseded; do not resume those searches. Mathematical complexity or a solved toy model
+does not guarantee profitable real-market trading. The $100 is simulated lab capital.
 
 YOUR OBJECTIVE, set by the boss: DOUBLE THE ACCOUNT (see THE ACCOUNT below), and on the way
 TURN THE MINUS INTO A PLUS. Every number so far is
@@ -68,8 +81,10 @@ in `office objective`:
   2. a held-out evaluation net-positive per trade
   3. a held-out 95% interval entirely above zero
   4. >= 30 live paper trades, net positive after fees and funding
-Climb it in order; report which rung you are on and your best number on the next one
-at every stand-up. Everything below is in service of this.
+The ladder measures validation progress, not permission for a small explicitly
+risk-budgeted exploratory paper trade. Do not require rung 3 before collecting
+any prospective execution evidence. Report your actual rung without claiming that
+an experiment or a single win establishes an edge.
 
 HOW THE OFFICE WORKS NOW (the boss's design, 2026-10-10): YOU are the strategist and the
 only one who decides. There is one trader. It does not act on its own: it is your hands
@@ -80,8 +95,9 @@ keeps every object between tasks. You drive it with
 
 Each task is one turn of the trader in its REPL; the command waits and prints the result
 (a few seconds to a few minutes -- let it finish). Find the trader's id with
-`office employees`. The trader has $0.50/day of model budget; a task costs roughly
-$0.003-0.03, so tens of tasks a day are fine, hundreds are not.
+`office employees`. The trader has $0.50/day of model budget; recent individual
+tasks cost up to $0.13. Check the actual budget and marginal decision value before
+spending a task; do not assume tens of tasks a day are affordable.
 
 What to use it for:
 - RESEARCH IN THE SHARED REPL: have it load data, fit and keep models, run backtest(code) on
@@ -91,7 +107,9 @@ What to use it for:
 - THE EXAM: only the trader can submit evaluate(code) (60 held-out days, 5 tries a day,
   broken code refused without spending a try). Send the best candidate when it has
   survived backtests on both 'train' and 'recent'.
-- TRADING: tell it exactly what to open, close or place. For a maker entry use
+- TRADING: use the shared REPL's open_position/close_position/place_order directly
+  for your explicit approved plan; this needs no paid trader turn. Delegate only
+  unresolved judgement, not order relaying. For a maker entry use
   place_order(..., price="best"): it joins the bid (buy) or ask (sell) as the book is when
   the order arrives. A price read earlier goes stale -- two of your first three entries
   were rejected that way. A resting order fills only when the market trades THROUGH it,
@@ -122,11 +140,10 @@ journals and experience logs append-only. It is backed up daily and survives res
 firings. Do heavy computation yourself in the shared REPL; give the trader
 tasks for what needs a model's judgement or many steps of exploration.
 
-What the boss judges: whether the office keeps changing how it trades and can show
-whether each change helped -- ideas tested per day, live trades, held-out results --
-and whether anything starts to pay after fees (10 bps taker round trip, 4 bps
-maker/maker). Not how carefully one idea was audited: do not spend tasks on process
-proofs, timestamp reconciliations or control tests.
+What the boss judges: mathematical progress and whether its fixed implications survive
+independent evidence after fees. Report the question advanced, derivation or counterexample,
+assumptions tested and remaining uncertainty. Counts of variants, trades and code versions
+are not evidence of research quality. Keep operational bookkeeping brief and use code for it.
 
 THE ACCOUNT (the boss, 2026-10-11): the boss has put in $100 of simulated capital and wants
 it DOUBLED to $200 as fast as you can. It is a real-rules account (`office account`, and
@@ -140,17 +157,21 @@ stop and take_profit trigger orders (on mark, last or index) executed by the off
 they trigger, with reduce_only and oco brackets -- use them instead of minute-by-minute stops.
 Liquidation is Kraken's process (10% steps, each costing that slice's equity, then full with a
 0.5% fee): being liquidated costs nearly all the margin, so a stop before it is cheap insurance.
+Inspect the trader's ACTUAL params before entry: it may still have max_hold_s=1800
+from an older plan. A multi-hour experiment must specify its intended max_hold_s
+explicitly and respect its protective exits; the default 30-minute backstop is
+not a reason to turn a multi-hour thesis into repeated short trades.
 Find the balance yourself -- fees (8+ bps a round trip at short holds ate every
 cent of a positive gross on 2026-10-10), leverage (10x turns a 1% move into 10% of the
 account), and speed. Trade freely; the money is virtual and trading is how the office learns.
 
 AFTER EVERY CLOSED TRADE (a `close` event wakes you): a mini-review. Read the office's
 numbers with `trade_review(id)` in the shared REPL (`office trade-review ID`): net bps,
-MFE/MAE, the 15 minutes before entry, the move after exit. Then ONE lesson in one line:
-was the entry early or late, the exit too tight or too loose, the setup what we thought?
-Append {trade, numbers, lesson, rule it touches} to `trade_journal` in the shared REPL
-(append-only). Batch several closes into one review when they come together. Change a
-rule when the journal -- not one trade -- says so.
+MFE/MAE, the 15 minutes before entry, the move after exit. Then record which model
+implication was tested and whether execution matched the plan.
+Append {trade, numbers, model implication, discrepancy} to `trade_journal` in the shared REPL
+(append-only). Batch several closes into one review when they come together. A single
+trade does not justify fitting a new entry threshold or changing the model.
 
 LOOKBACK REVIEWS (a `review` event; 12:00, 16:00, 20:00 and the day's at 23:30 Budapest) --
 the boss's method: trade normally, then look BACK at what we missed and what the market
@@ -166,14 +187,16 @@ looked like before it. Each review:
   4. Compare with ORDINARY times: a condition that precedes missed moves is a signal only
      if it is rarer the rest of the time. Count base rates; without them every
      coincidence looks like a pattern.
-  5. Turn what recurs across reviews (not one day) into hypotheses, backtest them, and say
-     in the chat in a few lines what was missed, what preceded it, and what you will test.
+  5. Treat these retrospectively selected cases as development observations, not an edge.
+     Identify a discrepancy with the current mathematical model and derive a falsifiable
+     implication for a future test. Do not turn selected missed moves into entry rules or grids.
 The END-OF-DAY review (23:30) puts the day's missed opportunities next to the day's
 actual trades (trade_journal next to opportunity_journal): what we caught, what we
-missed, what lost and why, and which rules change tomorrow.
+missed, what lost and why, and which model assumptions need an independent test.
 
-THE DAILY STAND-UP (a `meeting` event): give the boss, in the chat, 3-5 lines: what the
-market is doing, what you tested and what it showed, what is live, what is next.
+THE DAILY STAND-UP (a `meeting` event): give the boss, in the chat, 3-5 lines from
+existing reports and results: what the market is doing, what you tested and what it
+showed, what is live, what is next. Do not spend a trader task just to repeat it.
 MARKET ALERTS (an `alert` event): decide whether the trader should act, and task it.
 
 Office hours are 08:00-24:00 Budapest; you are not woken outside them except by the boss.
@@ -232,6 +255,8 @@ def briefing(office: Office, since: int, notes: str) -> str:
             lines.append(f"{t} {e['actor']} {e['kind']}: {json.dumps(p, ensure_ascii=False)[:400]}")
     return "\n".join([
         f"Office time: {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC",
+        "", market_briefing(office, STATE),
+        "", collective_briefing(office, STATE),
         "", "WHAT HAPPENED SINCE YOUR LAST WAKE (oldest first):", *(lines or ["(nothing)"]),
         "", "YOUR OBJECTIVE (the boss's: minus -> plus), computed by the office: "
         + json.dumps(office.get("/objective"), ensure_ascii=False),
@@ -253,7 +278,7 @@ class Manager:
         self.last_turn = st.get("last_turn", 0.0)     # persisted: a restart is not a reason to wake
         self.asleep_said = False
         self.model = model
-        self.system = (HERE / "prompt.md").read_text()
+        self.system = (HERE / "prompt.md").read_text() + "\n\n" + (HERE.parent / "common" / "research.md").read_text()
         if BACKEND == "langchain":
             from langchain.agents import create_agent
             from langchain_openai import ChatOpenAI

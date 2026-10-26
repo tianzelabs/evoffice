@@ -1,0 +1,14 @@
+{
+  "model": "xiaomi/mimo-v2.6-pro",
+  "task": "control",
+  "completed": false,
+  "max_tokens": 32768,
+  "reasoning": {
+    "enabled": true
+  },
+  "error": "RuntimeError: Saved API response has no billed cost; do not spend again: /Users/tianzewang/pixel-office/spikes/07-real-data-math/results/filtering/mimo-v2.6-pro/call-1.json",
+  "cost_usd": 0.0,
+  "api_seconds": 0.0,
+  "tool_calls": 0,
+  "tool_errors": 0
+}

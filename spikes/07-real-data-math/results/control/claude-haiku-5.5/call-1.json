@@ -1,0 +1,61 @@
+{
+  "elapsed_seconds": 1.4910949580080342,
+  "transport_returncode": 0,
+  "response": {
+    "id": "gen-1791837297-6vsSfp1Y0wkEAxIj2DNu",
+    "object": "chat.completion",
+    "created": 1791837297,
+    "model": "anthropic/claude-haiku-5.5",
+    "provider": "Claude Platform on AWS",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "native_finish_reason": "tool_use",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "refusal": null,
+          "reasoning": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "toolu_017rytauQejXGdZtHB19BYbA",
+              "function": {
+                "name": "python",
+                "arguments": "{\"code\": \"\\nimport numpy as np, pandas as pd\\nprint(pairs_train.columns.tolist(), len(pairs_train), len(pairs_validation))\\nprint(manifest['fixed_cost_proxies_bps']['one_way_fee_only'])\\nprint(pairs_train.head(3))\\n\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 2853,
+      "completion_tokens": 128,
+      "total_tokens": 2981,
+      "cost": 0.0003493,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0003493,
+        "upstream_inference_prompt_cost": 0.0002853,
+        "upstream_inference_completions_cost": 6.4e-05
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  }
+}

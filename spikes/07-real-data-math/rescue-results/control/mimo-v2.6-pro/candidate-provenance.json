@@ -1,0 +1,5 @@
+{
+  "source": "tool-2.json",
+  "extraction": "Unmodified import statements and solve_dp function source; no algorithm changes",
+  "not_a_final_answer": true
+}

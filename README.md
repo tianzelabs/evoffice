@@ -1,9 +1,32 @@
-# pixel-office
+# Recursive Commons
 
-A 2D pixel trading office. v0 cast: **one manager, one trader**; more traders later.
-Everyone — the manager, the trader, and the boss (the user) — talks in **one public
-chat**. A **leaderboard** on the office wall tracks every employee's record, per
-strategy version.
+**A gamified pixel office for studying AI collectives and recursive analytics.**
+
+The office is a small, observable research environment: a manager, one or more
+RLM (Recursive Language Model) workers, and a human boss share one public room.
+Agents research, act, explain themselves, test changes on held-out data, and earn
+progress only when the record shows improvement. The pixel world makes the social
+and operational dynamics visible; the ledger makes them measurable.
+
+The current market simulation is a deliberately concrete analytics sandbox, not the
+research goal. It gives the system noisy data, delayed feedback, costs, uncertainty,
+and a scoreboard without claiming that a paper strategy is ready for real trading.
+
+The project is named **Recursive Commons** because the two questions are coupled:
+how humans and AI form a shared working community, and how recursive language-model
+work changes when it can manipulate an analytics environment rather than merely
+answer a prompt.
+
+Research protocol: [Research case](docs/research-case.md).
+
+This is a personal **hobby research project** and an evolving lab notebook, not a
+commercial product, installable package, or financial service. The GitHub snapshot
+is intended for reading, discussion, and research collaboration; it does not ask
+you to download dependencies or run a production system.
+
+Large raw market snapshots, model transcripts, and transport traces stay outside
+the public snapshot. The repository keeps the source, research design, tests,
+summaries, and selected small examples needed to understand the work.
 
 The point is not the game. The point is **agent self-iteration**: a trader that
 changes how it trades, and a record that shows whether the change helped. The
@@ -27,8 +50,12 @@ Each directory's README says what it owns and — as important — what it does 
 
 ## Status
 
-**Scaffold only. No logic yet.** See `docs/architecture.md` for the build order
-and the two spikes that run before real code.
+The v0 office is running as a research prototype: server, public chat, manager,
+RLM trader, held-out evaluator, seasons, XP, leaderboard, and pixel frontend are
+implemented. The code is still experimental and the research claims are open.
+
+See `docs/architecture.md` for the system design and
+`docs/research-case.md` for the hypotheses, measures, and experiment loop.
 
 ## Where things run
 

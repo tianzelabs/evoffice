@@ -1,0 +1,8 @@
+{
+  "code": "\nsig_mu2=Q/(1-phi**2); g0=sig_mu2+R; g1=phi*sig_mu2\nx=train.r_bps.dropna().values\nac1=np.corrcoef(x[:-1],x[1:])[0,1]\nprint(\"sig_mu2\",sig_mu2,\"gamma0\",g0,\"gamma1\",g1,\"rho1 theory\",g1/g0)\nprint(\"train sample lag1 autocorr\",ac1, \"train sample var\",x.var(ddof=1), \"mean\",x.mean())\nprint(\"steady-state gain approx\", (lambda P: P/(P+R))( (lambda p: p)(0) ) if False else \"\")\n# steady-state posterior var\np=sig_mu2\nfor _ in range(2000):\n    pp=(1-p/(p+R))*p  # posterior\n    p=phi*phi*pp+Q\nprint(\"steady pred latent var\",p,\"steady gain\",(p)/(p+R),\"pred obs var\",p+R)\n",
+  "result": {
+    "ok": true,
+    "stdout": "sig_mu2 0.41025641025641013 gamma0 22.138980974052064 gamma1 0.3897435897435896 rho1 theory 0.017604405107912943\ntrain sample lag1 autocorr -0.015381391933074445 train sample var 21.728724563795655 mean -0.06133144918249338\nsteady-state gain approx \nsteady pred latent var 0.35687731189209404 steady gain 0.016158822109573177 pred obs var 22.08560187568775\n",
+    "stderr": ""
+  }
+}

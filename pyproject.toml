@@ -1,7 +1,7 @@
 [project]
 name = "pixel-office"
 version = "0.0.0"
-description = "A 2D pixel trading office: one manager agent, one RLM trader agent, a public chat, a leaderboard."
+description = "Recursive Commons: a gamified pixel office for studying AI collectives and recursive analytics."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

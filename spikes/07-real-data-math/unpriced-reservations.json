@@ -1,0 +1,6 @@
+{
+  "results/filtering/mimo-v2.6-pro/call-1.json": {
+    "max_cost_usd": 0.03192639,
+    "reason": "600s timeout, no cost receipt; reserve full request price bound, never treat as free"
+  }
+}

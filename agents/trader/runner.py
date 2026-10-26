@@ -163,6 +163,9 @@ class Runner:
             "trade_review": {"tool": self._trade_review, "description": "trade_review(position_id): a closed (or open) trade by the numbers: entry/exit, fees, funding, net bps, hold, MFE/MAE (best and worst point during it), the 15 minutes before entry (return, volatility, flow and book imbalance, spread), and the move 5/15/60 min after exit"},
             "market_context": {"tool": self._context, "description": "market_context(minutes): the market's state minute by minute (up to 7 days): bar o/h/l/c/v, and since 2026-10-10 09:00 UTC taker_buy/taker_sell volume, flow_imb, trades, max_trade, spread, book_imb (top-of-book size imbalance), basis_bps (mark vs index), funding_per_hour, open_interest (from 18:00 UTC). For studying what came before a move"},
             "fetch_bars": {"tool": self._fetch_bars, "description": "fetch_bars(minutes): up to 7 days of 1-minute PF_XBTUSD (Kraken BTC perpetual) bars, oldest first"},
+            "historical_experience": {"tool": self._experience, "description": "historical_experience(detail=False): compact development-only analogous 4h/8h outcomes, losing cases, costs and path risk; detail=True for individual cases, keep them in the REPL"},
+            "collective_knowledge": {"tool": self.office.knowledge, "description": "collective_knowledge(topic=None, limit=20): shared attributed contributions and office-measured paper results"},
+            "remember": {"tool": self.office.remember, "description": "remember(entry): append topic, perspective, kind, claim, information_cutoff, evidence refs, parent_ids, limitations; never overwrite old knowledge"},
             "set_name": {"tool": self._set_name, "description": "set_name(name): choose your own name (shown everywhere instead of your id)"},
             "backtest": {"tool": self._backtest, "description": "backtest(code, data='train', days=30): run the SAME simulator as evaluate on data you may see -- 'train' (up to 60 days before the held-out window) or 'recent' (up to 6 of the last 7 days). Returns totals, by_side, by_entry and trade_list (every trade). ~200 a day, no XP: your research tool"},
             "evaluate": {"tool": self._evaluate, "description": "evaluate(code): score a strategy on 60 days you cannot see, under the live fee rules. code must define decide(bars) -> {'side': 'long'|'short'|None, 'hold_minutes': int (longest hold), optional 'entry': 'limit', 'offset_bps': float, 'ttl_minutes': int, 'take_profit_bps': float (resting limit exit, maker), 'stop_loss_bps': float (market exit, taker)}; called every 15 min with the previous 1440 bars. 5 tries a day; aggregates only"},
@@ -172,19 +175,27 @@ class Runner:
                           "place_order": "(intent, price=None, size=None, side=None, position_id=None, post_only=True, ttl_minutes=None, order_type='limit', trigger_price=None, trigger_signal='mark', reduce_only=False, oco=None) [limit/ioc/stop/take_profit]",
                           "cancel_order": "(order_id)",
                           "say": "(text, to=None)", "jev": "(state, questions)", "fetch_bars": "(minutes)", "market_context": "(minutes)", "trade_review": "(position_id)",
-                          "evaluate": "(code)", "backtest": "(code, data='train', days=30)", "set_name": "(name)"}
-        prologue = (HERE / "prompt.md").read_text() + "\n\n" + (HERE / "mechanics.md").read_text()
+                          "evaluate": "(code)", "backtest": "(code, data='train', days=30)", "set_name": "(name)",
+                          "historical_experience":"(detail=False)", "collective_knowledge":"(topic=None, limit=20)", "remember":"(entry)"}
+        prologue = "\n\n".join(p.read_text() for p in
+                                 (HERE / "prompt.md", HERE / "mechanics.md", HERE.parent / "common" / "research.md"))
         self.rlm = RLM(backend="openai",
                        backend_kwargs={"model_name": MODEL, "base_url": self.office.url + "/llm/v1",
                                        "api_key": self.office.token},
                        environment="local", persistent=True, custom_tools=tools,
-                       max_iterations=12, max_budget=0.12, max_timeout=300,   # per task; the day is capped at $0.50 user_prologue=prologue,
+                       max_iterations=12, max_budget=0.12, max_timeout=300,   # per task; the day is capped at $0.50
+                       user_prologue=prologue,
                        # the office caps output at 8192 too; this is the tighter, per-call one
                        sampling_args={"max_tokens": 4096}, sub_sampling_args={"max_tokens": 4096},
                        # every turn's full trajectory, for debugging now and for the manager's review later
                        logger=RLMLogger(log_dir=str(STATE / "trajectories"), file_name="trader"))
 
     # ---------- tools (what the trader can do from its REPL) ----------
+    def _experience(self, detail=False):
+        from agents.common.experience import compact_experience
+        result=self.office.experience()
+        return result if detail else compact_experience(result)
+
     def _open(self, side, size, max_hold_s=None):
         try:
             v, _ = strategy_version(self.ns, mapmod.own_objects(self.ns, set(self.facts), set(self.tool_sigs)))

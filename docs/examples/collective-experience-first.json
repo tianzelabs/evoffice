@@ -1,0 +1,921 @@
+{
+  "schema_version": 1,
+  "source_kind": "development_train",
+  "bars": 79844,
+  "first_bar": "2026-06-12 09:02:00",
+  "last_bar": "2026-08-07 10:16:00",
+  "allowed_before": "2026-08-07T21:17:26+00:00",
+  "eligible_grid_points": 332,
+  "excluded_for_gaps": 261,
+  "episode_count": 71,
+  "features": [
+    "return_1h_bps",
+    "return_4h_bps",
+    "return_8h_bps",
+    "rv_4h_bps"
+  ],
+  "grid_hours": 4,
+  "horizons_hours": [
+    4,
+    8
+  ],
+  "limitations": [
+    "Development analogues, not an estimated probability of future success",
+    "Strictly contiguous 16h windows create selection toward complete-data periods",
+    "8h outcomes overlap on a 4h grid; counts are not independent sample sizes",
+    "Close-price proxies omit spread, impact, latency, queue and maker execution",
+    "Funding uses entry-notional hourly-rate proxy; missing hours never zero-filled",
+    "OHLC excursions are gross price excursions, not executable stops or net risk bounds"
+  ],
+  "source_sha256": "1bef901b9ac28e1ee8337eabcb1e08e14d7871f2e5c3ee89acb217ef99e8bbf7",
+  "source_file": "PF_XBTUSD_train_2026-10-13.json",
+  "generated_at_utc": "2026-10-13T21:17:26.883+00:00",
+  "current_state": {
+    "available": true,
+    "features": {
+      "return_1h_bps": 18.401144960131788,
+      "return_4h_bps": 12.861659033813755,
+      "return_8h_bps": 15.99191987206483,
+      "rv_4h_bps": 51.910123075130414
+    },
+    "information_cutoff": "2026-10-13T21:17:00+00:00",
+    "age_s": 26,
+    "anchor_lag_minutes": {
+      "1": 0,
+      "4": 0,
+      "8": 0
+    },
+    "missing_minutes_8h": 11
+  },
+  "analogues": [
+    {
+      "id": "train:1785441600",
+      "decision_time": "2026-07-30T20:01:00+00:00",
+      "features": {
+        "return_1h_bps": 12.99364239639944,
+        "return_4h_bps": 9.122958931222502,
+        "return_8h_bps": 3.245248029670744,
+        "rv_4h_bps": 46.827337087856165
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-31T00:01:00+00:00",
+          "gross_long_bps": 6.333904929631817,
+          "taker_fee_only_long_bps": -3.6692620228329975,
+          "taker_fee_only_short_bps": -16.33707188209663,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.23555466666667,
+          "net_long_proxy_bps": -3.9048166894996674,
+          "net_short_proxy_bps": -16.10151721542996,
+          "long_mae_bps": 25.181134232439284,
+          "long_mfe_bps": 47.27255874310554,
+          "short_mae_bps": 47.27255874310554,
+          "short_mfe_bps": 25.181134232439284
+        },
+        "8": {
+          "observed_until": "2026-07-31T04:01:00+00:00",
+          "gross_long_bps": -62.72110735196401,
+          "taker_fee_only_long_bps": -72.68974679828803,
+          "taker_fee_only_short_bps": 52.75246790563999,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.5875986249999999,
+          "net_long_proxy_bps": -73.27734542328803,
+          "net_short_proxy_bps": 53.34006653063999,
+          "long_mae_bps": 94.69960297230129,
+          "long_mfe_bps": 97.7893126940721,
+          "short_mae_bps": 97.7893126940721,
+          "short_mfe_bps": 94.69960297230129
+        }
+      },
+      "distance": 0.1875
+    },
+    {
+      "id": "train:1785283200",
+      "decision_time": "2026-07-29T00:01:00+00:00",
+      "features": {
+        "return_1h_bps": 32.339089481947525,
+        "return_4h_bps": 5.323146292586234,
+        "return_8h_bps": 5.323146292586234,
+        "rv_4h_bps": 53.83039635713434
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-29T04:01:00+00:00",
+          "gross_long_bps": -40.528275905236114,
+          "taker_fee_only_long_bps": -50.5080117672835,
+          "taker_fee_only_short_bps": 30.54854004318873,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.66111504166666,
+          "net_long_proxy_bps": -51.16912680895016,
+          "net_short_proxy_bps": 31.20965508485539,
+          "long_mae_bps": 50.699464838982465,
+          "long_mfe_bps": 33.95612305573836,
+          "short_mae_bps": 33.95612305573836,
+          "short_mfe_bps": 50.699464838982465
+        },
+        "8": {
+          "observed_until": "2026-07-29T08:01:00+00:00",
+          "gross_long_bps": 88.8805432979689,
+          "taker_fee_only_long_bps": 78.83610302631992,
+          "taker_fee_only_short_bps": -98.92498356961788,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 1.1639410416666602,
+          "net_long_proxy_bps": 77.67216198465326,
+          "net_short_proxy_bps": -97.76104252795122,
+          "long_mae_bps": 61.809532751228026,
+          "long_mfe_bps": 94.20085750946771,
+          "short_mae_bps": 94.20085750946771,
+          "short_mfe_bps": 61.809532751228026
+        }
+      },
+      "distance": 0.2588
+    },
+    {
+      "id": "train:1784030400",
+      "decision_time": "2026-07-14T12:01:00+00:00",
+      "features": {
+        "return_1h_bps": 16.595391587412855,
+        "return_4h_bps": 45.448726155421504,
+        "return_8h_bps": 40.78890541772573,
+        "rv_4h_bps": 50.8810100125055
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-14T16:01:00+00:00",
+          "gross_long_bps": 313.5155801949918,
+          "taker_fee_only_long_bps": 303.3588224048943,
+          "taker_fee_only_short_bps": -323.6723379850893,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.11048362500000002,
+          "net_long_proxy_bps": 303.2483387798943,
+          "net_short_proxy_bps": -323.56185436008934,
+          "long_mae_bps": 10.514242018734299,
+          "long_mfe_bps": 416.9056267125471,
+          "short_mae_bps": 416.9056267125471,
+          "short_mfe_bps": 10.514242018734299
+        },
+        "8": {
+          "observed_until": "2026-07-14T20:01:00+00:00",
+          "gross_long_bps": 279.42394698273085,
+          "taker_fee_only_long_bps": 269.28423500923947,
+          "taker_fee_only_short_bps": -289.56365895622224,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.304699125,
+          "net_long_proxy_bps": 268.97953588423945,
+          "net_short_proxy_bps": -289.2589598312222,
+          "long_mae_bps": 10.514242018734299,
+          "long_mfe_bps": 416.9056267125471,
+          "short_mae_bps": 416.9056267125471,
+          "short_mfe_bps": 10.514242018734299
+        }
+      },
+      "distance": 0.3988
+    },
+    {
+      "id": "train:1782864000",
+      "decision_time": "2026-07-01T00:01:00+00:00",
+      "features": {
+        "return_1h_bps": 22.912641280372625,
+        "return_4h_bps": -5.967400941144785,
+        "return_8h_bps": 46.10269417974821,
+        "rv_4h_bps": 62.099751045207974
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-01T04:01:00+00:00",
+          "gross_long_bps": 67.5571933056962,
+          "taker_fee_only_long_bps": 57.52341470904336,
+          "taker_fee_only_short_bps": -77.59097190234905,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.11202391666666,
+          "net_long_proxy_bps": 57.635438625710016,
+          "net_short_proxy_bps": -77.70299581901571,
+          "long_mae_bps": 219.56087824351323,
+          "long_mfe_bps": 109.01274374328196,
+          "short_mae_bps": 109.01274374328196,
+          "short_mfe_bps": 219.56087824351323
+        },
+        "8": {
+          "observed_until": "2026-07-01T08:01:00+00:00",
+          "gross_long_bps": 9.553542487674704,
+          "taker_fee_only_long_bps": -0.45123428356913386,
+          "taker_fee_only_short_bps": -19.558319258918544,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.35591212499999,
+          "net_long_proxy_bps": -0.09532215856914389,
+          "net_short_proxy_bps": -19.914231383918533,
+          "long_mae_bps": 219.56087824351323,
+          "long_mfe_bps": 130.50821434055004,
+          "short_mae_bps": 130.50821434055004,
+          "short_mfe_bps": 219.56087824351323
+        }
+      },
+      "distance": 0.4058
+    },
+    {
+      "id": "train:1785456000",
+      "decision_time": "2026-07-31T00:01:00+00:00",
+      "features": {
+        "return_1h_bps": -0.15438531486888785,
+        "return_4h_bps": 6.333904929631817,
+        "return_8h_bps": 15.462642256309778,
+        "rv_4h_bps": 63.70836984355864
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-31T04:01:00+00:00",
+          "gross_long_bps": -69.01130117952236,
+          "taker_fee_only_long_bps": -78.9767955289326,
+          "taker_fee_only_short_bps": 59.04580683011213,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.35204395833333,
+          "net_long_proxy_bps": -79.32883948726592,
+          "net_short_proxy_bps": 59.39785078844546,
+          "long_mae_bps": 100.96955474587776,
+          "long_mfe_bps": 91.39751744581037,
+          "short_mae_bps": 91.39751744581037,
+          "short_mfe_bps": 100.96955474587776
+        },
+        "8": {
+          "observed_until": "2026-07-31T08:01:00+00:00",
+          "gross_long_bps": -135.39801148644503,
+          "taker_fee_only_long_bps": -145.33031248070182,
+          "taker_fee_only_short_bps": 125.46571049218825,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.54238899999999,
+          "net_long_proxy_bps": -145.8727014807018,
+          "net_short_proxy_bps": 126.00809949218824,
+          "long_mae_bps": 148.82974124621694,
+          "long_mfe_bps": 91.39751744581037,
+          "short_mae_bps": 91.39751744581037,
+          "short_mfe_bps": 148.82974124621694
+        }
+      },
+      "distance": 0.4282
+    },
+    {
+      "id": "train:1784721600",
+      "decision_time": "2026-07-22T12:01:00+00:00",
+      "features": {
+        "return_1h_bps": -1.6670455406531115,
+        "return_4h_bps": 9.7102108936431,
+        "return_8h_bps": -31.579106417055634,
+        "rv_4h_bps": 52.20924486514238
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-22T16:01:00+00:00",
+          "gross_long_bps": 3.4862218449682736,
+          "taker_fee_only_long_bps": -6.515521265954209,
+          "taker_fee_only_short_bps": -13.487964955890757,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.41630670833334,
+          "net_long_proxy_bps": -6.9318279742875495,
+          "net_short_proxy_bps": -13.071658247557417,
+          "long_mae_bps": 74.27168278412721,
+          "long_mfe_bps": 29.708673113650885,
+          "short_mae_bps": 29.708673113650885,
+          "short_mfe_bps": 74.27168278412721
+        },
+        "8": {
+          "observed_until": "2026-07-22T20:01:00+00:00",
+          "gross_long_bps": -13.490162791403026,
+          "taker_fee_only_long_bps": -23.483417710007323,
+          "taker_fee_only_short_bps": 3.4969078727987277,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.5088829583333399,
+          "net_long_proxy_bps": -23.992300668340665,
+          "net_short_proxy_bps": 4.005790831132067,
+          "long_mae_bps": 74.27168278412721,
+          "long_mfe_bps": 58.65947191317833,
+          "short_mae_bps": 58.65947191317833,
+          "short_mfe_bps": 74.27168278412721
+        }
+      },
+      "distance": 0.4917
+    },
+    {
+      "id": "train:1784016000",
+      "decision_time": "2026-07-14T08:01:00+00:00",
+      "features": {
+        "return_1h_bps": -7.675578866572774,
+        "return_4h_bps": -4.638738263192943,
+        "return_8h_bps": 34.686536485097896,
+        "rv_4h_bps": 47.42998357620657
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-14T12:01:00+00:00",
+          "gross_long_bps": 45.448726155421504,
+          "taker_fee_only_long_bps": 35.42600179234379,
+          "taker_fee_only_short_bps": -55.47145051849922,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.02209045833333,
+          "net_long_proxy_bps": 35.44809225067712,
+          "net_short_proxy_bps": -55.49354097683255,
+          "long_mae_bps": 12.002304442453315,
+          "long_mfe_bps": 58.571245679170936,
+          "short_mae_bps": 58.571245679170936,
+          "short_mfe_bps": 12.002304442453315
+        },
+        "8": {
+          "observed_until": "2026-07-14T16:01:00+00:00",
+          "gross_long_bps": 360.3891947253879,
+          "taker_fee_only_long_bps": 350.2090001280252,
+          "taker_fee_only_short_bps": -370.56938932275057,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.08839316666667,
+          "net_long_proxy_bps": 350.12060696135853,
+          "net_short_proxy_bps": -370.4809961560839,
+          "long_mae_bps": 12.002304442453315,
+          "long_mfe_bps": 464.24913583408056,
+          "short_mae_bps": 464.24913583408056,
+          "short_mfe_bps": 12.002304442453315
+        }
+      },
+      "distance": 0.4982
+    },
+    {
+      "id": "train:1783425600",
+      "decision_time": "2026-07-07T12:01:00+00:00",
+      "features": {
+        "return_1h_bps": 35.330650527582996,
+        "return_4h_bps": 46.47252886689435,
+        "return_8h_bps": 28.498598818891274,
+        "rv_4h_bps": 64.52723639366972
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-07T16:01:00+00:00",
+          "gross_long_bps": 83.04257905622059,
+          "taker_fee_only_long_bps": 73.00105776669248,
+          "taker_fee_only_short_bps": -93.0841003457487,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.13131908333332998,
+          "net_long_proxy_bps": 72.86973868335916,
+          "net_short_proxy_bps": -92.95278126241537,
+          "long_mae_bps": 118.56459481220716,
+          "long_mfe_bps": 113.6704504191588,
+          "short_mae_bps": 113.6704504191588,
+          "short_mfe_bps": 118.56459481220716
+        },
+        "8": {
+          "observed_until": "2026-07-07T20:01:00+00:00",
+          "gross_long_bps": 70.72828026081001,
+          "taker_fee_only_long_bps": 60.692916120679605,
+          "taker_fee_only_short_bps": -80.76364440094042,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.055872458333329975,
+          "net_long_proxy_bps": 60.63704366234627,
+          "net_short_proxy_bps": -80.7077719426071,
+          "long_mae_bps": 118.56459481220716,
+          "long_mfe_bps": 135.29941112391697,
+          "short_mae_bps": 135.29941112391697,
+          "short_mfe_bps": 118.56459481220716
+        }
+      },
+      "distance": 0.5602
+    },
+    {
+      "id": "train:1785268800",
+      "decision_time": "2026-07-28T20:01:00+00:00",
+      "features": {
+        "return_1h_bps": 24.640979361219006,
+        "return_4h_bps": 0.0,
+        "return_8h_bps": 74.28904906862766,
+        "rv_4h_bps": 67.59103141926937
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-29T00:01:00+00:00",
+          "gross_long_bps": 5.323146292586234,
+          "taker_fee_only_long_bps": -4.679515280560059,
+          "taker_fee_only_short_bps": -15.325807865732527,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.6405966666666599,
+          "net_long_proxy_bps": -5.320111947226719,
+          "net_short_proxy_bps": -14.685211199065867,
+          "long_mae_bps": 61.05961923847714,
+          "long_mfe_bps": 20.04008016031955,
+          "short_mae_bps": 20.04008016031955,
+          "short_mfe_bps": 61.05961923847714
+        },
+        "8": {
+          "observed_until": "2026-07-29T04:01:00+00:00",
+          "gross_long_bps": -35.22670340681322,
+          "taker_fee_only_long_bps": -45.20909005510981,
+          "taker_fee_only_short_bps": 25.24431675851663,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 1.30171170833332,
+          "net_long_proxy_bps": -46.51080176344313,
+          "net_short_proxy_bps": 26.546028466849947,
+          "long_mae_bps": 61.05961923847714,
+          "long_mfe_bps": 39.29734468937962,
+          "short_mae_bps": 39.29734468937962,
+          "short_mfe_bps": 61.05961923847714
+        }
+      },
+      "distance": 0.6203
+    },
+    {
+      "id": "train:1784750400",
+      "decision_time": "2026-07-22T20:01:00+00:00",
+      "features": {
+        "return_1h_bps": -0.15177731232718372,
+        "return_4h_bps": -16.970468354622348,
+        "return_8h_bps": -13.490162791403026,
+        "rv_4h_bps": 70.73440140076814
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-23T00:01:00+00:00",
+          "gross_long_bps": 30.659482431509844,
+          "taker_fee_only_long_bps": 20.64415269029409,
+          "taker_fee_only_short_bps": -40.674812172725595,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.31665270833333997,
+          "net_long_proxy_bps": 20.32749998196075,
+          "net_short_proxy_bps": -40.35815946439225,
+          "long_mae_bps": 18.972451999696993,
+          "long_mfe_bps": 35.66820975942964,
+          "short_mae_bps": 35.66820975942964,
+          "short_mfe_bps": 18.972451999696993
+        },
+        "8": {
+          "observed_until": "2026-07-23T04:01:00+00:00",
+          "gross_long_bps": -45.98922364726366,
+          "taker_fee_only_long_bps": -55.96622903544002,
+          "taker_fee_only_short_bps": 36.01221825908729,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.09353670833334998,
+          "net_long_proxy_bps": -56.059765743773376,
+          "net_short_proxy_bps": 36.105754967420644,
+          "long_mae_bps": 52.515747135160055,
+          "long_mfe_bps": 61.015405631024144,
+          "short_mae_bps": 61.015405631024144,
+          "short_mfe_bps": 52.515747135160055
+        }
+      },
+      "distance": 0.683
+    },
+    {
+      "id": "train:1781510400",
+      "decision_time": "2026-06-15T08:01:00+00:00",
+      "features": {
+        "return_1h_bps": -12.023621088518288,
+        "return_4h_bps": -36.135614836858565,
+        "return_8h_bps": -13.999421763014608,
+        "rv_4h_bps": 57.60335294009902
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-06-15T12:01:00+00:00",
+          "gross_long_bps": 89.14285714285653,
+          "taker_fee_only_long_bps": 79.0982857142851,
+          "taker_fee_only_short_bps": -99.18742857142796,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.28668266666666997,
+          "net_long_proxy_bps": 78.81160304761843,
+          "net_short_proxy_bps": -98.9007459047613,
+          "long_mae_bps": 23.923809523809236,
+          "long_mfe_bps": 172.1904761904769,
+          "short_mae_bps": 172.1904761904769,
+          "short_mfe_bps": 23.923809523809236
+        },
+        "8": {
+          "observed_until": "2026-06-15T16:01:00+00:00",
+          "gross_long_bps": 231.77142857142786,
+          "taker_fee_only_long_bps": 221.65554285714214,
+          "taker_fee_only_short_bps": -241.8873142857136,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.41899879166667003,
+          "net_long_proxy_bps": 221.23654406547547,
+          "net_short_proxy_bps": -241.46831549404692,
+          "long_mae_bps": 23.923809523809236,
+          "long_mfe_bps": 248.38095238095326,
+          "short_mae_bps": 248.38095238095326,
+          "short_mfe_bps": 23.923809523809236
+        }
+      },
+      "distance": 0.7697
+    },
+    {
+      "id": "train:1783324800",
+      "decision_time": "2026-07-06T08:01:00+00:00",
+      "features": {
+        "return_1h_bps": 27.33716901363703,
+        "return_4h_bps": -24.034660510420245,
+        "return_8h_bps": -71.13405306726217,
+        "rv_4h_bps": 60.655581492422165
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-06T12:01:00+00:00",
+          "gross_long_bps": -135.99619591060375,
+          "taker_fee_only_long_bps": -145.92819781264845,
+          "taker_fee_only_short_bps": 126.06419400855904,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.47632850000001004,
+          "net_long_proxy_bps": -146.40452631264847,
+          "net_short_proxy_bps": 126.54052250855905,
+          "long_mae_bps": 216.83309557774643,
+          "long_mfe_bps": 16.167379933429427,
+          "short_mae_bps": 16.167379933429427,
+          "short_mfe_bps": 216.83309557774643
+        },
+        "8": {
+          "observed_until": "2026-07-06T16:01:00+00:00",
+          "gross_long_bps": 45.80757647804745,
+          "taker_fee_only_long_bps": 35.78467268980843,
+          "taker_fee_only_short_bps": -55.83048026628647,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.85614445833335,
+          "net_long_proxy_bps": 34.928528231475084,
+          "net_short_proxy_bps": -54.974335807953125,
+          "long_mae_bps": 289.11079410366193,
+          "long_mfe_bps": 127.75400221905153,
+          "short_mae_bps": 127.75400221905153,
+          "short_mfe_bps": 289.11079410366193
+        }
+      },
+      "distance": 0.8209
+    },
+    {
+      "id": "train:1784635200",
+      "decision_time": "2026-07-21T12:01:00+00:00",
+      "features": {
+        "return_1h_bps": 23.137996219282364,
+        "return_4h_bps": 20.258829221093677,
+        "return_8h_bps": 121.4055556403948,
+        "rv_4h_bps": 58.48005546550614
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-21T16:01:00+00:00",
+          "gross_long_bps": 49.63939768852343,
+          "taker_fee_only_long_bps": 39.61457798967917,
+          "taker_fee_only_short_bps": -59.66421738736769,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.646990375,
+          "net_long_proxy_bps": 40.26156836467917,
+          "net_short_proxy_bps": -60.311207762367694,
+          "long_mae_bps": 10.410694348048644,
+          "long_mfe_bps": 94.60152690183854,
+          "short_mae_bps": 94.60152690183854,
+          "short_mfe_bps": 10.410694348048644
+        },
+        "8": {
+          "observed_until": "2026-07-21T20:01:00+00:00",
+          "gross_long_bps": 8.600138809258251,
+          "taker_fee_only_long_bps": -1.4041612601463793,
+          "taker_fee_only_short_bps": -18.604438878662883,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.9209369583333299,
+          "net_long_proxy_bps": -0.48322430181304943,
+          "net_short_proxy_bps": -19.52537583699621,
+          "long_mae_bps": 39.37958296870714,
+          "long_mfe_bps": 94.60152690183854,
+          "short_mae_bps": 94.60152690183854,
+          "short_mfe_bps": 39.37958296870714
+        }
+      },
+      "distance": 0.8351
+    },
+    {
+      "id": "train:1783497600",
+      "decision_time": "2026-07-08T08:01:00+00:00",
+      "features": {
+        "return_1h_bps": 43.64368845120925,
+        "return_4h_bps": 18.657906487211662,
+        "return_8h_bps": -68.60683855261729,
+        "rv_4h_bps": 66.89712415261798
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-08T12:01:00+00:00",
+          "gross_long_bps": -99.32351770791881,
+          "taker_fee_only_long_bps": -109.27385594906485,
+          "taker_fee_only_short_bps": 89.37317946677277,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.5625146249999999,
+          "net_long_proxy_bps": -109.83637057406486,
+          "net_short_proxy_bps": 89.93569409177277,
+          "long_mae_bps": 179.86470354158345,
+          "long_mfe_bps": 11.77875049741317,
+          "short_mae_bps": 11.77875049741317,
+          "short_mfe_bps": 179.86470354158345
+        },
+        "8": {
+          "observed_until": "2026-07-08T16:01:00+00:00",
+          "gross_long_bps": -176.5220851571825,
+          "taker_fee_only_long_bps": -186.4338241146039,
+          "taker_fee_only_short_bps": 166.61034619976107,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 1.29207029166667,
+          "net_long_proxy_bps": -187.72589440627058,
+          "net_short_proxy_bps": 167.90241649142774,
+          "long_mae_bps": 213.92757660167126,
+          "long_mfe_bps": 11.77875049741317,
+          "short_mae_bps": 11.77875049741317,
+          "short_mfe_bps": 213.92757660167126
+        }
+      },
+      "distance": 0.8587
+    },
+    {
+      "id": "train:1782187200",
+      "decision_time": "2026-06-23T04:01:00+00:00",
+      "features": {
+        "return_1h_bps": -12.636505460218439,
+        "return_4h_bps": 11.729012886274592,
+        "return_8h_bps": -73.49634844091568,
+        "rv_4h_bps": 64.01777299452142
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-06-23T08:01:00+00:00",
+          "gross_long_bps": -183.2268545275617,
+          "taker_fee_only_long_bps": -193.13524110029792,
+          "taker_fee_only_short_bps": 173.31846795482548,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.090860625,
+          "net_long_proxy_bps": -193.0443804752979,
+          "net_short_proxy_bps": 173.22760732982547,
+          "long_mae_bps": 297.4117058998105,
+          "long_mfe_bps": 1.0934253893379875,
+          "short_mae_bps": 1.0934253893379875,
+          "short_mfe_bps": 297.4117058998105
+        },
+        "8": {
+          "observed_until": "2026-06-23T12:01:00+00:00",
+          "gross_long_bps": -246.33311985504335,
+          "taker_fee_only_long_bps": -256.20995329511584,
+          "taker_fee_only_short_bps": 236.45628641497086,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.67864379166666,
+          "net_long_proxy_bps": -255.53130950344917,
+          "net_short_proxy_bps": 235.7776426233042,
+          "long_mae_bps": 410.97174276386704,
+          "long_mfe_bps": 1.0934253893379875,
+          "short_mae_bps": 1.0934253893379875,
+          "short_mfe_bps": 410.97174276386704
+        }
+      },
+      "distance": 0.9063
+    },
+    {
+      "id": "train:1782158400",
+      "decision_time": "2026-06-22T20:01:00+00:00",
+      "features": {
+        "return_1h_bps": 34.072875501758304,
+        "return_4h_bps": -32.76408314658808,
+        "return_8h_bps": -9.7589689571842,
+        "rv_4h_bps": 81.06147273712973
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-06-23T00:01:00+00:00",
+          "gross_long_bps": -85.12551749802255,
+          "taker_fee_only_long_bps": -95.08295473927353,
+          "taker_fee_only_short_bps": 75.16808025677156,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.45941541666666996,
+          "net_long_proxy_bps": -95.5423701559402,
+          "net_short_proxy_bps": 75.62749567343823,
+          "long_mae_bps": 117.06696850821041,
+          "long_mfe_bps": 17.521281379373477,
+          "short_mae_bps": 17.521281379373477,
+          "short_mfe_bps": 117.06696850821041
+        },
+        "8": {
+          "observed_until": "2026-06-23T04:01:00+00:00",
+          "gross_long_bps": -73.49634844091568,
+          "taker_fee_only_long_bps": -83.45960026669522,
+          "taker_fee_only_short_bps": 63.53309661513614,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.65282170833333,
+          "net_long_proxy_bps": -84.11242197502855,
+          "net_short_proxy_bps": 64.18591832346947,
+          "long_mae_bps": 117.06696850821041,
+          "long_mfe_bps": 17.521281379373477,
+          "short_mae_bps": 17.521281379373477,
+          "short_mfe_bps": 117.06696850821041
+        }
+      },
+      "distance": 0.9354
+    },
+    {
+      "id": "train:1785758400",
+      "decision_time": "2026-08-03T12:01:00+00:00",
+      "features": {
+        "return_1h_bps": -26.490911702280464,
+        "return_4h_bps": -10.868696555582646,
+        "return_8h_bps": -53.15847272843066,
+        "rv_4h_bps": 53.479945700203274
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-08-03T16:01:00+00:00",
+          "gross_long_bps": 175.20841000367992,
+          "taker_fee_only_long_bps": 165.12080579867808,
+          "taker_fee_only_short_bps": -185.29601420868175,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.08682383333333002,
+          "net_long_proxy_bps": 165.20762963201142,
+          "net_short_proxy_bps": -185.3828380420151,
+          "long_mae_bps": 22.24106757124367,
+          "long_mfe_bps": 226.73088308238886,
+          "short_mae_bps": 226.73088308238886,
+          "short_mfe_bps": 22.24106757124367
+        },
+        "8": {
+          "observed_until": "2026-08-03T20:01:00+00:00",
+          "gross_long_bps": 201.92969262524673,
+          "taker_fee_only_long_bps": 191.8287277789341,
+          "taker_fee_only_short_bps": -212.03065747155935,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.44659237499999005,
+          "net_long_proxy_bps": 192.2753201539341,
+          "net_short_proxy_bps": -212.47724984655935,
+          "long_mae_bps": 22.24106757124367,
+          "long_mfe_bps": 245.93180472662678,
+          "short_mae_bps": 245.93180472662678,
+          "short_mfe_bps": 22.24106757124367
+        }
+      },
+      "distance": 0.9393
+    },
+    {
+      "id": "train:1782907200",
+      "decision_time": "2026-07-01T12:01:00+00:00",
+      "features": {
+        "return_1h_bps": 0.5123213279367711,
+        "return_4h_bps": -19.259284509058894,
+        "return_8h_bps": -76.76274719129682,
+        "rv_4h_bps": 69.53021228666093
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-01T16:01:00+00:00",
+          "gross_long_bps": 255.29371584699368,
+          "taker_fee_only_long_bps": 245.16606898907017,
+          "taker_fee_only_short_bps": -265.42136270491716,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.25231125,
+          "net_long_proxy_bps": 245.41838023907016,
+          "net_short_proxy_bps": -265.67367395491715,
+          "long_mae_bps": 51.912568306010655,
+          "long_mfe_bps": 383.1967213114762,
+          "short_mae_bps": 383.1967213114762,
+          "short_mfe_bps": 51.912568306010655
+        },
+        "8": {
+          "observed_until": "2026-07-01T20:01:00+00:00",
+          "gross_long_bps": 237.02185792349616,
+          "taker_fee_only_long_bps": 226.90334699453442,
+          "taker_fee_only_short_bps": -247.1403688524579,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.32607895833334,
+          "net_long_proxy_bps": 227.22942595286776,
+          "net_short_proxy_bps": -247.46644781079124,
+          "long_mae_bps": 51.912568306010655,
+          "long_mfe_bps": 383.1967213114762,
+          "short_mae_bps": 383.1967213114762,
+          "short_mfe_bps": 51.912568306010655
+        }
+      },
+      "distance": 0.9522
+    },
+    {
+      "id": "train:1781683200",
+      "decision_time": "2026-06-17T08:01:00+00:00",
+      "features": {
+        "return_1h_bps": -12.968387647992463,
+        "return_4h_bps": -52.428423804024014,
+        "return_8h_bps": -30.46040908329384,
+        "rv_4h_bps": 66.43308393183857
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-06-17T12:01:00+00:00",
+          "gross_long_bps": -109.83974701721743,
+          "taker_fee_only_long_bps": -119.78482714370882,
+          "taker_fee_only_short_bps": 99.89466689072604,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.59393516666667,
+          "net_long_proxy_bps": -119.19089197704216,
+          "net_short_proxy_bps": 99.30073172405937,
+          "long_mae_bps": 148.0315922944131,
+          "long_mfe_bps": 7.791136436547941,
+          "short_mae_bps": 7.791136436547941,
+          "short_mfe_bps": 148.0315922944131
+        },
+        "8": {
+          "observed_until": "2026-06-17T16:01:00+00:00",
+          "gross_long_bps": 44.6080752837652,
+          "taker_fee_only_long_bps": 34.58577124612332,
+          "taker_fee_only_short_bps": -54.630379321407084,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": -0.62529220833334,
+          "net_long_proxy_bps": 35.211063454456664,
+          "net_short_proxy_bps": -55.255671529740425,
+          "long_mae_bps": 148.0315922944131,
+          "long_mfe_bps": 54.38518767472811,
+          "short_mae_bps": 54.38518767472811,
+          "short_mfe_bps": 148.0315922944131
+        }
+      },
+      "distance": 1.0034
+    },
+    {
+      "id": "train:1784736000",
+      "decision_time": "2026-07-22T16:01:00+00:00",
+      "features": {
+        "return_1h_bps": 26.891522333636342,
+        "return_4h_bps": 3.4862218449682736,
+        "return_8h_bps": 13.199817933546854,
+        "rv_4h_bps": 91.62577649851582
+      },
+      "outcomes": {
+        "4": {
+          "observed_until": "2026-07-22T20:01:00+00:00",
+          "gross_long_bps": -16.970468354622348,
+          "taker_fee_only_long_bps": -26.961983120445037,
+          "taker_fee_only_short_bps": 6.9789535887996585,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.09257625,
+          "net_long_proxy_bps": -27.054559370445038,
+          "net_short_proxy_bps": 7.071529838799658,
+          "long_mae_bps": 50.60836098610522,
+          "long_mfe_bps": 55.15402215252152,
+          "short_mae_bps": 55.15402215252152,
+          "short_mfe_bps": 50.60836098610522
+        },
+        "8": {
+          "observed_until": "2026-07-23T00:01:00+00:00",
+          "gross_long_bps": 13.636983499250022,
+          "taker_fee_only_long_bps": 3.6301650075003966,
+          "taker_fee_only_short_bps": -23.64380199099965,
+          "funding_complete": true,
+          "long_funding_cost_proxy_bps": 0.40922895833334,
+          "net_long_proxy_bps": 3.2209360491670567,
+          "net_short_proxy_bps": -23.234573032666308,
+          "long_mae_bps": 50.60836098610522,
+          "long_mfe_bps": 55.15402215252152,
+          "short_mae_bps": 55.15402215252152,
+          "short_mfe_bps": 50.60836098610522
+        }
+      },
+      "distance": 1.0097
+    }
+  ],
+  "outcome_summary": {
+    "4": {
+      "long": {
+        "complete_cost_cases": 20,
+        "mean_net_proxy_bps": 9.08,
+        "median_net_proxy_bps": -4.61,
+        "positive_cases": 9,
+        "worst_net_proxy_bps": -193.04,
+        "largest_gross_mae_bps": 297.41
+      },
+      "short": {
+        "complete_cost_cases": 20,
+        "mean_net_proxy_bps": -29.09,
+        "median_net_proxy_bps": -15.39,
+        "positive_cases": 8,
+        "worst_net_proxy_bps": -323.56,
+        "largest_gross_mae_bps": 416.91
+      }
+    },
+    "8": {
+      "long": {
+        "complete_cost_cases": 20,
+        "mean_net_proxy_bps": 29.89,
+        "median_net_proxy_bps": 1.56,
+        "positive_cases": 10,
+        "worst_net_proxy_bps": -255.53,
+        "largest_gross_mae_bps": 410.97
+      },
+      "short": {
+        "complete_cost_cases": 20,
+        "mean_net_proxy_bps": -49.93,
+        "median_net_proxy_bps": -21.57,
+        "positive_cases": 8,
+        "worst_net_proxy_bps": -370.48,
+        "largest_gross_mae_bps": 464.25
+      }
+    }
+  },
+  "matching": {
+    "method": "Euclidean distance over 4 prespecified features; historical scale only",
+    "scales": {
+      "return_1h_bps": 61.46546509149527,
+      "return_4h_bps": 93.64493046883454,
+      "return_8h_bps": 129.94463105777615,
+      "rv_4h_bps": 39.91754074981927
+    },
+    "selected": 20,
+    "pool": 71
+  }
+}

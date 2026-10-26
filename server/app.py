@@ -16,6 +16,7 @@ import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -28,6 +29,7 @@ from .evaluator import service as evaluation
 from .llm import Gateway, GatewayRefused, budget
 from .market import PRODUCT, FuturesMarket, Stale
 from .store import Store
+from . import knowledge
 
 STATIC = Path(__file__).with_name("static")
 WEB = Path(__file__).resolve().parents[1] / "web" / "dist"     # the pixel office (P3), built by `npm run build`
@@ -105,6 +107,17 @@ class Open(BaseModel):
     pair: str = PRODUCT
     strategy_version: str | None = None
     max_hold_s: int | None = Field(default=None, gt=0)
+
+
+class KnowledgeEntry(BaseModel):
+    topic: str = Field(min_length=1,max_length=120)
+    perspective: Literal['trend','microstructure','risk','execution','synthesis']
+    kind: Literal['observation','hypothesis','experiment','result','correction']
+    claim: str = Field(min_length=1,max_length=1500)
+    information_cutoff: str
+    evidence: list[str] = Field(min_length=1,max_length=8)
+    parent_ids: list[int] = Field(default_factory=list,max_length=8)
+    limitations: str = Field(min_length=1,max_length=1000)
 
 
 def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: float = 10.0,
@@ -345,6 +358,27 @@ def create_app(store: Store, market, tokens: dict[str, dict], backstop_every_s: 
             return await run_in_threadpool(market.context, pair, minutes)
         except (Stale, ValueError) as e:
             raise HTTPException(503, str(e))
+
+    @app.get('/research/experience')
+    async def historical_experience(w: dict = Depends(who)):
+        """Compact development-only analogues; never expose evaluation history."""
+        try:
+            return await run_in_threadpool(knowledge.experience,market)
+        except (Stale,ValueError,OSError) as e:
+            raise HTTPException(503,str(e))
+
+    @app.get('/knowledge')
+    def shared_knowledge(topic: str | None = None, limit: int = 20, w: dict = Depends(who)):
+        return knowledge.listing(store,topic,limit)
+
+    @app.post('/knowledge')
+    def contribute_knowledge(body: KnowledgeEntry,w: dict = Depends(who)):
+        if any(not ref.strip() or len(ref)>300 for ref in body.evidence):
+            raise HTTPException(422,'evidence references must be nonempty and at most 300 characters each')
+        try:
+            return knowledge.append(store,w,body.model_dump())
+        except ValueError as e:
+            raise HTTPException(422,str(e))
 
     @app.post("/report")
     def report(body: Report, w: dict = Depends(who)):

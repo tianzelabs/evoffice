@@ -70,9 +70,10 @@ Testing your own ideas
   entry, exit, hold, pnl_bps). About 200 a day, no XP. Besides side and hold_minutes,
   decide() may return 'entry': 'limit' with 'offset_bps' and 'ttl_minutes' (a maker
   entry), 'take_profit_bps' (a resting maker exit) and 'stop_loss_bps' (a taker exit);
-  hold_minutes is then the longest hold. Maker entry + take-profit is the 4 bps round trip. This is where you iterate -- dozens of
-  variants a day is normal. Do not hand-write your own simulator in the REPL: the
-  office's is the one that counts.
+  hold_minutes is then the longest hold. Maker entry + take-profit is the 4 bps round trip.
+  Use this to validate a frozen candidate derived from a mathematical model, not to
+  search parameter grids. Synthetic checks of a derivation belong in the REPL;
+  reported trading performance must use the office's simulator.
 - A pattern that looks good on data you have already looked at often fails on
   data you have not. A variant that wins on 'train' but not on 'recent' (or the
   reverse) is probably noise; the more variants you try, the more one looks good by luck.

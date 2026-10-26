@@ -28,6 +28,9 @@
     office params TRADER --reason R [--heartbeat-min N] [--max-size X] [--max-hold-min N]
     office fire TRADER --reason R        fire a trader (rarely)
     office notes [--set TEXT]            read, or replace, your private notes
+    office experience                   similar development-history episodes, both winners and losers
+    office knowledge [--topic TOPIC]    shared attributed observations, hypotheses and corrections
+    office remember FILE                append a KnowledgeEntry JSON file to the shared knowledge
 """
 from __future__ import annotations
 
@@ -68,6 +71,9 @@ def main(argv: list[str]) -> str:
     pr.add_argument("--heartbeat-min", type=int); pr.add_argument("--max-size", type=float); pr.add_argument("--max-hold-min", type=int)
     f = sub.add_parser("fire"); f.add_argument("trader"); f.add_argument("--reason", required=True)
     n = sub.add_parser("notes"); n.add_argument("--set")
+    sub.add_parser('experience')
+    kn = sub.add_parser('knowledge'); kn.add_argument('--topic'); kn.add_argument('--limit',type=int,default=20)
+    rm = sub.add_parser('remember'); rm.add_argument('file')
     args = ap.parse_args(argv)
     o = Office()
     if args.cmd == "chat": return ops.read_recent_chat(o, args.n)
@@ -96,6 +102,11 @@ def main(argv: list[str]) -> str:
         return ops.set_trader_params(o, args.trader, args.reason, args.heartbeat_min, args.max_size, args.max_hold_min)
     if args.cmd == "fire": return ops.fire_trader(o, args.trader, args.reason)
     if args.cmd == "notes": return ops.save_notes(args.set) if args.set is not None else (ops.read_notes() or "(no notes)")
+    if args.cmd == 'experience':return json.dumps(o.experience(),ensure_ascii=False)
+    if args.cmd == 'knowledge':return json.dumps(o.knowledge(args.topic,args.limit),ensure_ascii=False)
+    if args.cmd == 'remember':
+        entry=json.loads(open(args.file).read())
+        return ops._dry({'remember':entry}) if ops.DRY else json.dumps(o.remember(entry),ensure_ascii=False)
     return ""
 
 

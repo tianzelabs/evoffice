@@ -1,0 +1,14 @@
+{
+  "model": "anthropic/claude-haiku-5.5",
+  "task": "filtering",
+  "completed": true,
+  "max_tokens": 32768,
+  "reasoning": {
+    "enabled": true
+  },
+  "finish_reason": "stop",
+  "cost_usd": 0.0053816,
+  "api_seconds": 35.03849921000074,
+  "tool_calls": 4,
+  "tool_errors": 0
+}

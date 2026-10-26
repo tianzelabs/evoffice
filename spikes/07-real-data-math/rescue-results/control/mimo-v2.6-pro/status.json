@@ -1,0 +1,15 @@
+{
+  "model": "xiaomi/mimo-v2.6-pro",
+  "task": "control",
+  "completed": false,
+  "max_tokens": 32768,
+  "reasoning": {
+    "enabled": true
+  },
+  "finish_reason": "stop",
+  "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+  "cost_usd": 0.0131049462,
+  "api_seconds": 156.41945958300494,
+  "tool_calls": 3,
+  "tool_errors": 1
+}

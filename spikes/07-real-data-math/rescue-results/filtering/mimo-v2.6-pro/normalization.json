@@ -1,0 +1,9 @@
+{
+  "raw_response_unchanged": true,
+  "repairs": [
+    "Appended one missing outer JSON closing brace",
+    "Moved existing limitations from empirical to the required outer level",
+    "Moved existing conclusion from empirical to the required outer level"
+  ],
+  "mathematics_numbers_and_python_unchanged": true
+}

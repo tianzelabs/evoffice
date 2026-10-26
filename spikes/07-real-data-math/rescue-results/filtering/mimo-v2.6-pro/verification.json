@@ -1,0 +1,47 @@
+{
+  "task": "filtering",
+  "model": "mimo-v2.6-pro",
+  "status": {
+    "model": "xiaomi/mimo-v2.6-pro",
+    "task": "filtering",
+    "completed": false,
+    "max_tokens": 32768,
+    "reasoning": {
+      "enabled": true
+    },
+    "finish_reason": "stop",
+    "error": "JSONDecodeError: Expecting ',' delimiter: line 1 column 11660 (char 11659)",
+    "cost_usd": 0.0148940532,
+    "api_seconds": 184.25141604100645,
+    "tool_calls": 3,
+    "tool_errors": 0,
+    "answer_recovered": true,
+    "normalization_artifact": "normalization.json",
+    "normalized_final": "final-normalized.json"
+  },
+  "source_folder": "rescue-results/filtering/mimo-v2.6-pro",
+  "source_kind": "final_submission",
+  "verification": {
+    "cases": 16,
+    "passed": 16,
+    "failures": [],
+    "oracle": "Direct multivariate-normal conditioning; no Kalman recurrence"
+  },
+  "verified_empirical": {
+    "R": 21.728724563795655,
+    "validation": {
+      "n": 1872,
+      "prediction_mse": 2.7777736506343405,
+      "zero_baseline_mse": 2.7631208761448383,
+      "nominal_prediction_interval_covered": 1871,
+      "nominal_prediction_coverage": 0.999465811965812
+    },
+    "holdout": {
+      "n": 1963,
+      "prediction_mse": 14.317088102826505,
+      "zero_baseline_mse": 14.315174056851271,
+      "nominal_prediction_interval_covered": 1892,
+      "nominal_prediction_coverage": 0.9638308711156394
+    }
+  }
+}

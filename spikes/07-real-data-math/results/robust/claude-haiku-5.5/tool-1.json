@@ -1,0 +1,8 @@
+{
+  "code": "\nimport numpy as np, pandas as pd\nprint(pairs_train.columns.tolist(), len(pairs_train), len(pairs_validation))\nprint(pairs_train.head(3))\nprint(manifest.keys() if isinstance(manifest,dict) else type(manifest))\n",
+  "result": {
+    "ok": true,
+    "stdout": "['m', 'target_m', 'epoch', 'target_epoch', 'segment', 'partition', 'x_bps', 'y_bps'] 5921 1775\n                     m             target_m  ...     x_bps     y_bps\n0  2026-10-05 20:24:00  2026-10-05 20:25:00  ... -0.116584  1.282440\n1  2026-10-05 20:25:00  2026-10-05 20:26:00  ...  1.282440 -2.914262\n2  2026-10-05 20:26:00  2026-10-05 20:27:00  ... -2.914262  0.349813\n\n[3 rows x 8 columns]\ndict_keys(['frozen_at_utc', 'source', 'instrument', 'timestamps_timezone', 'raw_sha256', 'rows', 'first', 'last', 'missing_minutes', 'contiguous_segments', 'split_rule', 'partitions', 'nonmissing_fields', 'fees', 'fixed_cost_proxies_bps', 'cost_limitations', 'scope'])\n",
+    "stderr": ""
+  }
+}

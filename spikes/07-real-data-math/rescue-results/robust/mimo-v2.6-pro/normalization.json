@@ -1,0 +1,8 @@
+{
+  "raw_response_unchanged": true,
+  "repairs": [
+    "Extracted the single complete JSON fence after the model's prose preamble",
+    "Removed 6 invalid JSON apostrophe escapes"
+  ],
+  "mathematics_numbers_and_python_unchanged": true
+}

@@ -1,0 +1,43 @@
+{
+  "task": "filtering",
+  "model": "claude-haiku-5.5",
+  "status": {
+    "model": "anthropic/claude-haiku-5.5",
+    "task": "filtering",
+    "completed": true,
+    "max_tokens": 32768,
+    "reasoning": {
+      "enabled": true
+    },
+    "finish_reason": "stop",
+    "cost_usd": 0.0053816,
+    "api_seconds": 35.03849921000074,
+    "tool_calls": 4,
+    "tool_errors": 0
+  },
+  "source_folder": "results/filtering/claude-haiku-5.5",
+  "source_kind": "final_submission",
+  "verification": {
+    "cases": 16,
+    "passed": 16,
+    "failures": [],
+    "oracle": "Direct multivariate-normal conditioning; no Kalman recurrence"
+  },
+  "verified_empirical": {
+    "R": 21.728724563795655,
+    "validation": {
+      "n": 1872,
+      "prediction_mse": 2.7777736506343405,
+      "zero_baseline_mse": 2.7631208761448383,
+      "nominal_prediction_interval_covered": 1871,
+      "nominal_prediction_coverage": 0.999465811965812
+    },
+    "holdout": {
+      "n": 1963,
+      "prediction_mse": 14.317088102826505,
+      "zero_baseline_mse": 14.315174056851271,
+      "nominal_prediction_interval_covered": 1892,
+      "nominal_prediction_coverage": 0.9638308711156394
+    }
+  }
+}

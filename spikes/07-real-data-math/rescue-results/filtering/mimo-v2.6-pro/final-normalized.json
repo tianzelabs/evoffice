@@ -1,0 +1,121 @@
+{
+  "derivation": "Model: r_t = mu_t + eps_t, eps_t ~ N(0,R) iid; mu_{t+1} = phi*mu_t + eta_{t+1}, eta ~ N(0,Q) iid, independent of eps; |phi|<1, Q>0, R>0.\n\nCausal Kalman recursions (mu_t | r_1..r_{t-1}) ~ N(m_t, P_t):\n(1) PRIOR: m_1 = m0, P_1 = p0 with default p0 = Q/(1-phi^2) (stationary latent variance V).\n(2) OBSERVATION PREDICTIVE: r_t | r_1..r_{t-1} ~ N(m_t, F_t), F_t = P_t + R (includes observation noise).\n(3) GAIN: K_t = P_t / (P_t + R) = P_t/F_t.\n(4) POSTERIOR: (mu_t | r_1..r_t) ~ N(m_t^+, P_t^+) with m_t^+ = m_t + K_t (r_t - m_t), P_t^+ = (1-K_t) P_t = P_t R/(P_t+R).\n(5) NEXT PRIOR: m_{t+1} = phi m_t^+, P_{t+1} = phi^2 P_t^+ + Q.\nIndex convention: with returns indexed 0..n-1, pred_mean[i]=m_i and pred_var[i]=F_i use only returns[0..i-1]; post_*[i] condition on returns[i]; the loop then advances the state so that (m,P) is the prior for i+1. A segment's first observation is forecast from (m0,p0) itself; state is reset only at a real gap (missing r_bps / new segment), never at the train/validation boundary.\n\nStationary second-order structure (init at V = Q/(1-phi^2)): gamma_0 = Var(r_t) = V + R = Q/(1-phi^2) + R; gamma_k = Cov(r_t, r_{t-k}) = V phi^k = Q phi^k/(1-phi^2) for k >= 1; rho_k = gamma_k/gamma_0. Stationary F = V+R, K = V/(V+R).\n\nIdentifiability from theoretical values: given exact gamma_0, gamma_1, gamma_2, if gamma_1 != 0 (equivalently phi != 0 and Q > 0), phi = gamma_2/gamma_1, V = gamma_1/phi, Q = V(1-phi^2), R = gamma_0 - V; the sign of phi is fixed by the signs of odd lags, so phi and -phi are not aliased. Degenerate cases: phi = 0 gives gamma_k = 0 for all k >= 1 and only gamma_0 = Q + R is identified, so Q and R are confounded forever (a white-noise observation admits any split of the variance between state noise and measurement noise); Q = 0 (excluded) removes all dynamics and identifies nothing beyond gamma_0 = R. With finite samples, phi = gamma_2/gamma_1 is ill-conditioned when |gamma_1| is small (small |phi| or V << R): sampling noise in lag covariances is O(gamma_0/sqrt(n)), so a tiny theoretical lag-1 covariance cannot support estimation of phi, Q, R separately even though they are theoretically identifiable.\n\nPredictive checks computed on real data: R was frozen as the ddof=1 variance of the 5933 nonmissing TRAIN r_bps; phi=0.95, Q=0.04 bps^2 (illustrative, not fitted). Filter run per contiguous segment over frame (train+validation only), reset at gaps, carried across the split within segment 12.",
+  "python": "import numpy as np\n\n\ndef kalman_filter(returns, phi, q, r, m0=0.0, p0=None):\n    \"\"\"Causal Kalman filter for r_t = mu_t + eps_t, mu_{t+1} = phi*mu_t + eta_{t+1}.\n\n    Parameters\n    ----------\n    returns : sequence of float\n        Observation series in time order.\n    phi : float\n        State persistence, abs(phi) < 1.\n    q : float\n        State-innovation variance Q > 0 (bps^2).\n    r : float\n        Observation variance R > 0 (bps^2).\n    m0 : float\n        Initial latent prior mean.\n    p0 : float or None\n        Initial latent prior variance. If None, uses the stationary\n        variance q / (1 - phi**2).\n\n    Returns\n    -------\n    dict with equal-length lists (one entry per input, same order):\n      pred_mean[i], pred_var[i]  -- mean/variance of returns[i] BEFORE seeing it\n                                    (pred_var includes observation noise R)\n      post_mean[i], post_var[i]  -- posterior mean/variance of mu_i given returns[0..i]\n    \"\"\"\n    if not np.isfinite(phi) or abs(phi) >= 1.0:\n        raise ValueError(\"phi must be finite with abs(phi) < 1\")\n    if not (q > 0.0) or not (r > 0.0):\n        raise ValueError(\"q and r must be positive\")\n    if p0 is None:\n        p0 = q / (1.0 - phi * phi)\n    if not (p0 >= 0.0):\n        raise ValueError(\"p0 must be nonnegative\")\n\n    pred_mean, pred_var, post_mean, post_var = [], [], [], []\n    m, P = float(m0), float(p0)\n\n    for y in returns:\n        y = float(y)\n        # (2) observation predictive: mean m, variance F = P + R\n        F = P + r\n        pred_mean.append(m)\n        pred_var.append(F)\n        # (3) Kalman gain\n        K = P / F\n        # (4) Gaussian posterior update\n        mp = m + K * (y - m)\n        Pp = P - K * P          # == P * r / (P + r)\n        post_mean.append(mp)\n        post_var.append(Pp)\n        # (5) time update -> prior for the next observation\n        m = phi * mp\n        P = phi * phi * Pp + q\n\n    return {\n        \"pred_mean\": pred_mean,\n        \"pred_var\": pred_var,\n        \"post_mean\": post_mean,\n        \"post_var\": post_var,\n    }\n",
+  "empirical": {
+    "parameters_used": {
+      "phi": 0.95,
+      "Q_bps2": 0.04,
+      "R_bps2": 21.728724563795655,
+      "R_definition": "sample variance (ddof=1) of the 5933 nonmissing TRAIN r_bps",
+      "p0_default_bps2": 0.41025641025641013
+    },
+    "stationary_theory": {
+      "V_latent_bps2": 0.41025641025641013,
+      "F_pred_bps2": 22.138980974052064,
+      "K_stationary": 0.018530952745171518,
+      "rho_1_2_3": [
+        0.017604405107912943,
+        0.016724184852517296,
+        0.01588797560989143
+      ]
+    },
+    "theory_recovery_check": "exact theoretical gamma_0,gamma_1,gamma_2 give phi=gamma_2/gamma_1=0.9500000000000002, V=gamma_1/phi=0.41025641025641013, R=gamma_0-V=21.728724563795655 (verified numerically)",
+    "run_scope": "frame = 7927 train+validation bars, 122 contiguous segments, each segment's 7805 nonmissing r_bps filtered chronologically; reset (m0=0, p0=V) only at the 122 gap starts; segment 12 crosses the train/validation boundary and the filter was carried across it; no holdout values accessed",
+    "validation": {
+      "n": 1872,
+      "one_step_MSE": 2.7777736506343405,
+      "zero_mean_baseline_MSE": 2.7631208761448383,
+      "MSE_ratio_vs_baseline": 1.005302979907975,
+      "gaussian_95pct_coverage": 0.999465811965812,
+      "coverage_misses": 1,
+      "coverage_detail": "1871 of 1872 observations fell inside m +/- 1.95996*sqrt(pred_var); intervals are far too WIDE for validation data",
+      "pred_var_mean_bps2": 22.099476401847145,
+      "pred_var_range_bps2": [
+        22.08560187568803,
+        22.138980974052064
+      ],
+      "pred_sd_bps": 4.701008019759927,
+      "validation_sd_bps": 1.6626263442365938,
+      "validation_mean_bps": 0.01646771567926805,
+      "validation_var_ddof1_bps2": 2.764326360549541,
+      "max_abs_pred_mean_bps": 0.28267535332551275,
+      "carried_rows_only": {
+        "n": 1776,
+        "MSE": 2.822867771583161,
+        "baseline_MSE": 2.8074229552293604
+      },
+      "validation_segments": 97,
+      "reset_rows_in_validation": 96,
+      "error_mean_bps": -0.0317,
+      "error_lag1_autocorr": -0.029
+    },
+    "last_five_validation_forecasts": [
+      {
+        "time_utc": "2026-10-11 10:56:00",
+        "y_bps": 0.9648,
+        "pred_mean_bps": 0.0,
+        "pred_var_bps2": 22.139,
+        "pred_sd_bps": 4.7052,
+        "note": "first return after a gap: forecast is the reset prior (m0=0)"
+      },
+      {
+        "time_utc": "2026-10-11 10:57:00",
+        "y_bps": 0.0,
+        "pred_mean_bps": 0.017,
+        "pred_var_bps2": 22.1321,
+        "pred_sd_bps": 4.7045
+      },
+      {
+        "time_utc": "2026-10-11 10:58:00",
+        "y_bps": 0.8441,
+        "pred_mean_bps": 0.0158,
+        "pred_var_bps2": 22.1262,
+        "pred_sd_bps": 4.7038
+      },
+      {
+        "time_utc": "2026-10-11 10:59:00",
+        "y_bps": -1.0852,
+        "pred_mean_bps": 0.0292,
+        "pred_var_bps2": 22.121,
+        "pred_sd_bps": 4.7033
+      },
+      {
+        "time_utc": "2026-10-11 11:00:00",
+        "y_bps": 0.8441,
+        "pred_mean_bps": 0.009,
+        "pred_var_bps2": 22.1164,
+        "pred_sd_bps": 4.7028
+      }
+    ],
+    "alignment_check": "Causal alignment verified in code: (a) prefix-invariance test — perturbing later returns left pred_mean/pred_var at earlier indices bit-identical (True); (b) each segment's first nonmissing return is predicted from the reset prior before any observation; (c) all segments' first observation aligns with j==0 in the filter output. Values above are printed at 4 dp for the forecasts and full float precision elsewhere.",
+    "train_in_sample_MSE": 21.761020470793536,
+    "train_baseline_MSE": 21.72882376011506,
+    "empirical_train_autocovariances": {
+      "gamma_0": 21.725,
+      "gamma_1": -0.334,
+      "gamma_2": 0.634,
+      "theory_gamma_0": 22.139,
+      "theory_gamma_1": 0.3897435897435897,
+      "theory_gamma_2": 0.3702564102564102,
+      "empirical_acf_1_2_3": [
+        -0.0154,
+        0.0292,
+        -0.0214
+      ],
+      "comment": "empirical lag-1 covariance is negative while the frozen model demands +0.39 bps^2; gamma_2/gamma_1 = -1.90, not 0.95 — the frozen phi has no empirical support here"
+    }
+  },
+  "limitations": [
+    "phi=0.95, Q=0.04 bps^2 are illustrative frozen assumptions, not fitted market truth; R is a training-sample estimate (21.73 bps^2) and itself has sampling error.",
+    "The model assumes independent Gaussian eps/eta, constant variances, and a single stable phi; real one-minute returns are heavy-tailed (train sample min -52.7, max +53.6 vs sd 4.14), volatility-clustered, and subject to jumps; a local-level model cannot represent stochastic volatility or leverage effects.",
+    "Gaussian 95% coverage of 99.95% is NOT evidence of fit: predictive sd is 4.70 bps while validation sd is 1.66 bps (intervals ~2.8x too wide), driven by a train/validation variance regime shift (train var 21.73 vs validation var 2.76 bps^2). Wide miscalibrated intervals inflate coverage and say nothing about whether the latent drift mu_t is real or whether forecasts are useful.",
+    "Signal-to-noise is tiny: stationary latent variance V=0.41 bps^2 vs R=21.73 bps^2 (K=0.0186), so the posterior mean moves by <2% of each surprise and |pred_mean| never exceeded 0.28 bps — far below the 5 bps one-way / 10 bps round-trip fee-only cost proxies. The filter is essentially a zero-mean forecaster.",
+    "Only ~7 days of 1-minute data (5933 train returns, 1872 validation returns) with 171 missing minutes and 141 raw contiguous segments (122 in frame); gaps destroy long-lag dependence, and estimated autocovariances at lags 1-2 are within sampling noise of zero.",
+    "No true hidden drift is established: mu_t is a latent random walk whose posterior is dominated by measurement noise; at phi=0 or V/R -> 0 the data cannot distinguish drifting latent mean from white noise. Forecast error lag-1 autocorrelation -0.029 is consistent with noise.",
+    "Validation MSE (2.7778) is slightly WORSE than the zero-mean baseline (2.7631), ratio 1.0053; with n=1872 this difference is within noise and provides no evidence of predictive edge. Only one split/window was examined; no threshold or variant search was performed.",
+    "Stationarity and parameter stability across train/validation/holdout are unverified; the variance regime already shifted between train and validation. Coverage measured on one validation window cannot guarantee future coverage.",
+    "Costs, spread, funding, impact, latency and queue effects are omitted (microstructure fields are unavailable in training); fee-only proxies (5/10 bps) are not a total-cost bound, and no net PnL is computed or claimed. Maker execution is never assumed.",
+    "Heldout data were not accessed; all statistics come from train+validation only. Selection of illustrative phi/Q and any post-hoc reading of validation diagnostics carries overfitting risk."
+  ],
+  "conclusion": "Under the fixed illustrative model (phi=0.95, Q=0.04 bps^2, R=21.7287 bps^2), the causal Kalman filter's validation one-step MSE is 2.7778 bps^2 versus 2.7631 bps^2 for the zero-mean baseline (5.03e-3 relative degradation), and the largest validation forecast magnitude is 0.28 bps — orders of magnitude below the 5-10 bps fee-only cost proxies. The nominal Gaussian 95% predictive coverage of 99.95% reflects intervals that are roughly 2.8x too wide in standard deviation (4.70 vs 1.66 bps), not model skill, and the empirical lag-1 autocovariance (-0.334 bps^2) has the opposite sign to the model's +0.39 bps^2. Identification of (phi,Q,R) from exact autocovariances fails exactly at phi=0 (only Q+R is identified) and is practically ill-conditioned whenever gamma_1 is near zero or V << R, which is the regime here. There is no evidence of a true hidden drift, no evidence of stable predictive edge, and no executable basis for trading: the honest conclusion is no evidence to trade."
+}

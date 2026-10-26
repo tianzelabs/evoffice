@@ -1,0 +1,98 @@
+{
+  "derivation": "State (p, z) with p in {-1,0,1} (previous position) and z in {0,1} (regime). Action q in {-1,0,1}. Let n be the number of steps remaining. Base case: V_0(p,z) = -c|p|, since after the last return the position is liquidated at cost c|p|, and the action is 0. Recursion: V_n(p,z) = max over q of [ q*mus[z] - lam*q^2*variances[z]/2 - c|q-p| + sum_{z2} T[z,z2] V_{n-1}(q,z2) ]. The action is the q maximizing this. Ties within 1e-10 are broken by smallest |q-p|, then smallest |q|, then smallest q. Terminal liquidation is already included through the base case. The term lam*q^2*var[z]/2 is an additive per-stage mean-variance surrogate. It is not the variance of terminal cumulative PnL. Terminal PnL variance under a position path would require the covariance structure of the returns and the cross terms between positions and returns. Here the penalty is charged per stage and is never compounded or squared across stages, so it is a control heuristic only.",
+  "python": "import numpy as np\n\ndef solve_dp(horizon, c, mus, variances, lam, transition):\n    P = [-1, 0, 1]\n    Q = [-1, 0, 1]\n    H = int(horizon)\n    V = np.zeros((H + 1, 3, 2))\n    A = np.zeros((H + 1, 3, 2))\n    for pi, p in enumerate(P):\n        for z in range(2):\n            V[0, pi, z] = -c * abs(p)\n            A[0, pi, z] = 0\n    for n in range(1, H + 1):\n        for pi, p in enumerate(P):\n            for z in range(2):\n                cands = []\n                for qi, q in enumerate(Q):\n                    cont = sum(transition[z][z2] * V[n - 1, qi, z2] for z2 in range(2))\n                    val = q * mus[z] - lam * q * q * variances[z] / 2.0 - c * abs(q - p) + cont\n                    cands.append((val, qi, q))\n                best = max(t[0] for t in cands)\n                tied = [t for t in cands if best - t[0] <= 1e-10]\n                tied.sort(key=lambda t: (abs(t[2] - p), abs(t[2]), t[2]))\n                V[n, pi, z] = tied[0][0]\n                A[n, pi, z] = tied[0][2]\n    return {'values': V.tolist(), 'actions': A.tolist()}\n",
+  "empirical": {
+    "data_used": "pairs_train only for estimates (n=5921 pairs). Validation used only for evaluation (n=1775 pairs). Z is 1 if x_bps>=0, else 0. Transition is from x-sign to y-sign of the same consecutive pair.",
+    "state_counts_train": {
+      "z0": 2922,
+      "z1": 2999
+    },
+    "mus_bps": [
+      -0.0754358596,
+      -0.0504080877
+    ],
+    "variances_bps2_ddof1": [
+      23.2534965977,
+      20.3210382547
+    ],
+    "transition_rows_z0_z1": [
+      [
+        0.4969199,
+        0.5030801
+      ],
+      [
+        0.4914972,
+        0.5085028
+      ]
+    ],
+    "cost_c_bps": 5.0,
+    "lam": 0.04,
+    "horizon": 15,
+    "per_stage_edge_long_mu_minus_lam_var_over_2": [
+      -0.541,
+      -0.457
+    ],
+    "per_stage_edge_short": [
+      -0.39,
+      -0.356
+    ],
+    "values_horizon15_index_p_m1_0_1_z_0_1": [
+      [
+        [
+          -5.0,
+          -5.0
+        ]
+      ],
+      [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      [
+        [
+          -5.0,
+          -5.0
+        ]
+      ]
+    ],
+    "actions_horizon15_index_p_m1_0_1_z_0_1": [
+      [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      [
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    ],
+    "values_full_nested": "values[15] = [[[-5.0,-5.0],[0.0,0.0],[-5.0,-5.0]]] under the p=-1,0,1 ordering shown above, with values[15] having shape (3,2)",
+    "actions_full_nested": "actions[15] is all zero, shape (3,2)",
+    "checks": {
+      "base_case": "values[0,p,z] = -5|p| for all p,z (verified in the solver output: V[0] has -5 at p=±1 and 0 at p=0)",
+      "terminal_liquidation_check": "A one-step manual enumeration at p=0,z=1 gives max value 0.0 with q=0, matching the solver output",
+      "independent_enumeration": "Full recursive enumeration for horizon 2 over all states matched the solver values exactly. Horizon 15 was not brute-forced over 3^15 paths per state, so that check is limited to horizon 2 plus the one-step manual check",
+      "preservation_test": "Count of (n,p!=0,z) cases where the optimal action equals the held position: 0. At n=15 and p=+1, holding q=+1 has value -5.54 (z0) and -5.46 (z1), while closing (q=0) has value -5.0. The 5 bps opening cost is paid again if the position is reopened from flat (-10.54 and -10.46). So preserving the position is cheaper than reopening it, but it is still dominated by closing. The chosen parameters do not exhibit an optimal preservation of a non-zero position."
+    },
+    "validation": {
+      "n_pairs": 1775,
+      "conditional_mean_prediction_MSE": 2.8088362383,
+      "zero_prediction_MSE": 2.8038457468,
+      "difference_model_minus_zero": 0.0049904914,
+      "relative_skill": -0.00178,
+      "validation_mean_y_bps": 0.0143
+    }
+  },
+  "limitations": "The model is a first-order finite-state approximation with z defined by a single-sign regime. Omitted history means that returns beyond the current sign, volatility clustering, and microstructure are ignored. State uncertainty is ignored: z is treated as observed, and the estimated transition has a near 50/50 structure, so the regime carries very little information. The fee-only cost of 5 bps one-way omits spread, funding, impact, latency, and queue effects. Training spread and funding are unavailable (null, not zero), so no fitted cost model is used. The mean edge is about -0.05 to -0.08 bps per minute, far below the 5 bps one-way cost and the variance penalty. Validation MSE shows the conditional mean is no better than zero on out-of-sample pairs. The per-stage variance penalty is a surrogate, not the true terminal PnL variance. No holdout was accessed, and no threshold or profit search was performed.",
+  "conclusion": "With these parameters, the DP recommends staying flat in every state and at every horizon. Opening any position costs 5 bps and the expected per-minute edge after risk penalty is negative in both regimes, so the optimal policy is flat. Validation shows the conditional mean predictor has MSE 2.8088 versus 2.8038 for the zero predictor, so there is no evidence to trade. This is a toy result and not a profitable or executable strategy claim."
+}
