@@ -55,7 +55,7 @@ class Actor {
   constructor(private scene: OfficeScene, public role: string, public name: string, public place: Place | null, frame: number, at: Pt) {
     this.shadow = scene.add.ellipse(at.x, at.y, 34, 10, 0x000000, 0.18);
     this.sprite = scene.add.image(at.x, at.y, "people", frame).setScale(SCALE).setOrigin(0.5, 1);
-    this.label = scene.add.text(at.x, at.y + 4, name, TXT(11, "#1d1d1f", { backgroundColor: "#ffffffcc", padding: { x: 3, y: 1 } }))
+    this.label = scene.add.text(at.x, at.y + 4, name, TXT(11, "#d7fff5", { backgroundColor: "#102b38e8", padding: { x: 4, y: 2 } }))
       .setOrigin(0.5, 0).setVisible(false);              // names live on the desk plates; shown only while away
     this.sync();
   }
@@ -103,12 +103,12 @@ class Actor {
   say(text: string, icon = ""): Promise<void> {
     this.bubble?.destroy();
     const t = (icon ? icon + " " : "") + (text.length > 220 ? text.slice(0, 217) + "…" : text);
-    const body = this.scene.add.text(0, 0, t, TXT(13, "#111", { wordWrap: { width: 240, useAdvancedWrap: true } })).setOrigin(0.5, 1);
+    const body = this.scene.add.text(0, 0, t, TXT(13, "#e9fffa", { wordWrap: { width: 240, useAdvancedWrap: true } })).setOrigin(0.5, 1);
     const bw = body.width + 16, bh = body.height + 12;
     const g = this.scene.add.graphics();
-    g.fillStyle(0xffffff, 0.97).fillRoundedRect(-bw / 2, -bh - 6, bw, bh, 6);
-    g.lineStyle(2, 0x1d1d1f, 1).strokeRoundedRect(-bw / 2, -bh - 6, bw, bh, 6);
-    g.fillStyle(0xffffff, 1).fillTriangle(-6, -7, 6, -7, 0, 2);
+    g.fillStyle(0x102b38, 0.98).fillRoundedRect(-bw / 2, -bh - 6, bw, bh, 6);
+    g.lineStyle(2, 0x54e1db, 0.85).strokeRoundedRect(-bw / 2, -bh - 6, bw, bh, 6);
+    g.fillStyle(0x102b38, 1).fillTriangle(-6, -7, 6, -7, 0, 2);
     body.setPosition(0, -12);
     const bubble = this.scene.add.container(0, 0, [g, body]);
     this.bubble = bubble;
@@ -124,7 +124,7 @@ class Actor {
   setThinking(on: boolean) {
     this.thinking = on;
     if (on && !this.dots) {
-      this.dots = this.scene.add.text(0, 0, "", TXT(18, "#1d1d1f", { backgroundColor: "#ffffffdd", padding: { x: 4, y: 0 } })).setOrigin(0.5, 1);
+      this.dots = this.scene.add.text(0, 0, "", TXT(18, "#54e1db", { backgroundColor: "#102b38e8", padding: { x: 4, y: 0 } })).setOrigin(0.5, 1);
       this.sync();
     } else if (!on) {
       this.dots?.destroy(); this.dots = undefined;
@@ -192,43 +192,43 @@ export class OfficeScene extends Phaser.Scene {
   drawRoom() {
     const g = this.add.graphics().setDepth(-20);
     for (let y = 130; y < H; y += 22) {                                     // floor: warm planks
-      g.fillStyle(((y / 22) | 0) % 2 ? 0xc89f72 : 0xd2ab7f).fillRect(0, y, W, 22);
-      g.fillStyle(0xb8905f);
+      g.fillStyle(((y / 22) | 0) % 2 ? 0x9a704f : 0xa77b55).fillRect(0, y, W, 22);
+      g.fillStyle(0x76533d);
       g.fillRect(0, y, W, 2);
       for (let x = (((y / 22) | 0) % 3) * 50; x < W; x += 150) g.fillRect(x, y, 2, 22);
     }
-    g.fillStyle(0xe6dccb).fillRect(0, 0, W, 130);                         // wall
-    g.fillStyle(0xd8ccb7).fillRect(0, 96, W, 34);                          // wainscot
-    g.fillStyle(0x8f7a5c).fillRect(0, 124, W, 8);                          // skirting
+    g.fillStyle(0x1b3042).fillRect(0, 0, W, 130);                         // deep blue wall
+    g.fillStyle(0x243e50).fillRect(0, 96, W, 34);                          // wainscot
+    g.fillStyle(0x102331).fillRect(0, 124, W, 8);                          // skirting
     this.sky = this.add.graphics().setDepth(-19);
     for (const x0 of [24, 152]) {                                          // two windows with sills
-      g.lineStyle(6, 0x6b5638, 1);
-      g.fillStyle(0x6b5638).fillRect(x0 - 6, 90, 122, 7);
+      g.lineStyle(6, 0x8b6849, 1);
+      g.fillStyle(0x8b6849).fillRect(x0 - 6, 90, 122, 7);
     }
     const frames = this.add.graphics().setDepth(-18);
     for (const x0 of [24, 152]) {
-      frames.lineStyle(6, 0x6b5638, 1).strokeRect(x0, 14, 110, 76);
+      frames.lineStyle(6, 0x8b6849, 1).strokeRect(x0, 14, 110, 76);
       frames.lineBetween(x0 + 55, 14, x0 + 55, 90);
     }
     // the leaderboard screen
-    g.fillStyle(0x24242b).fillRoundedRect(292, 8, 330, 106, 6);
-    g.fillStyle(0x0d1a12).fillRect(300, 15, 314, 92);
-    this.add.text(310, 19, "LEADERBOARD", TXT(12, "#5dff9a")).setDepth(-8);
-    this.screenText = this.add.text(310, 38, "", TXT(12, "#a8f0c0", { lineSpacing: 3 })).setDepth(-8);
+    g.fillStyle(0x17232d).fillRoundedRect(292, 8, 330, 106, 6);
+    g.fillStyle(0x071a20).fillRect(300, 15, 314, 92);
+    this.add.text(310, 19, "COLLECTIVE BOARD", TXT(12, "#54e1db")).setDepth(-8);
+    this.screenText = this.add.text(310, 38, "", TXT(12, "#b4f5e5", { lineSpacing: 3 })).setDepth(-8);
     // the manager's whiteboard: the latest instruction in the room
-    g.fillStyle(0x9a9aa2).fillRoundedRect(640, 10, 220, 104, 4);
-    g.fillStyle(0xfbfbf8).fillRect(646, 16, 208, 92);
-    this.add.text(652, 19, "MANAGER SAYS", TXT(10, "#1a5fb4")).setDepth(-8);
-    this.whiteboard = this.add.text(652, 34, "", TXT(10, "#2a2a2a", { wordWrap: { width: 196, useAdvancedWrap: true }, lineSpacing: 1, maxLines: 6 })).setDepth(-8);
-    this.clock = this.add.text(910, 40, "", TXT(15, "#3a2f22")).setOrigin(0.5).setDepth(-8);
+    g.fillStyle(0x304856).fillRoundedRect(640, 10, 220, 104, 4);
+    g.fillStyle(0x10212d).fillRect(646, 16, 208, 92);
+    this.add.text(652, 19, "MANAGER SAYS", TXT(10, "#f4ae55")).setDepth(-8);
+    this.whiteboard = this.add.text(652, 34, "", TXT(10, "#e6f3ef", { wordWrap: { width: 196, useAdvancedWrap: true }, lineSpacing: 1, maxLines: 6 })).setDepth(-8);
+    this.clock = this.add.text(910, 40, "", TXT(15, "#f4ae55")).setOrigin(0.5).setDepth(-8);
     // rugs under the work areas
-    g.fillStyle(0x6f8fae, 0.30).fillRoundedRect(110, 300, 520, 88, 12);
-    g.fillStyle(0x7e9e7a, 0.26).fillRoundedRect(712, 236, 220, 92, 12);
-    g.fillStyle(0xa0645a, 0.28).fillRoundedRect(300, 470, 300, 96, 12);   // under the meeting table
+    g.fillStyle(0x2e8790, 0.24).fillRoundedRect(110, 300, 520, 88, 12);
+    g.fillStyle(0x387c72, 0.24).fillRoundedRect(712, 236, 220, 92, 12);
+    g.fillStyle(0xd28a45, 0.20).fillRoundedRect(300, 470, 300, 96, 12);   // under the meeting table
     // the manager's glass office
-    g.fillStyle(0xbfe3f7, 0.10).fillRect(690, 136, 264, 270);
+    g.fillStyle(0x54e1db, 0.08).fillRect(690, 136, 264, 270);
     const glass = this.add.graphics().setDepth(420);
-    glass.lineStyle(4, 0x8cc3e4, 0.9);
+    glass.lineStyle(4, 0x54e1db, 0.75);
     glass.lineBetween(690, 136, 954, 136); glass.lineBetween(954, 136, 954, 406); glass.lineBetween(690, 406, 954, 406);
     glass.lineBetween(690, 136, 690, 270); glass.lineBetween(690, 340, 690, 406);
     this.tile(4, 13, 890, 196, 196);                                       // a cabinet in the manager's office
@@ -238,7 +238,7 @@ export class OfficeScene extends Phaser.Scene {
     // the meeting table: where the office sits down together
     for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) this.tile(i, 9 + j, 378 + i * T, 516 + j * T, 516 + j * T);
     [[2, 2, 330, 548], [3, 2, 528, 548]].forEach(([c, r, x, y]) => this.tile(c, r, x, y));
-    this.add.text(450, 568, "MEETING", TXT(9, "#6b5638")).setOrigin(0.5, 0).setDepth(-8);
+    this.add.text(450, 568, "COMMONS", TXT(9, "#f4ae55")).setOrigin(0.5, 0).setDepth(-8);
     // a bookshelf wall on the right
     [[0, 15], [1, 15], [4, 15]].forEach(([c, r], i) => this.tile(c, r, 708 + i * T, 470, 470));
     // the coffee corner and the back wall
@@ -247,8 +247,8 @@ export class OfficeScene extends Phaser.Scene {
     this.add.image(560, 168, "cooler").setScale(SCALE).setOrigin(0.5, 1).setDepth(168);
     this.tile(16, 0, 20, 186); this.tile(17, 0, 236, 186); this.tile(16, 0, 250, 580); this.tile(17, 0, 20, 580);
     this.tile(16, 0, 880, 580);
-    g.fillStyle(0x4a3a28).fillRect(620, 594, 80, 6);                       // the door
-    this.add.text(660, 586, "ENTRANCE", TXT(9, "#6b5638")).setOrigin(0.5, 1).setDepth(-8);
+    g.fillStyle(0x2c1f19).fillRect(620, 594, 80, 6);                       // the door
+    this.add.text(660, 586, "ENTER", TXT(9, "#f4ae55")).setOrigin(0.5, 1).setDepth(-8);
     // night: the room darkens and desk lamps glow
     this.night = this.add.graphics().setDepth(9_000);
     this.alarm = this.add.graphics().setDepth(9_002);
@@ -265,16 +265,16 @@ export class OfficeScene extends Phaser.Scene {
     this.add.image(x - 62, y - 26, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(y + 2);
     const right = this.add.image(x + 62, y - 26, "monitor").setScale(SCALE).setOrigin(0.5, 1).setDepth(y + 2);
     const d = this.add.graphics().setDepth(y + 3);
-    d.fillStyle(0x2b2b33).fillRoundedRect(x - 22, y - 40, 44, 9, 2);       // keyboard
-    d.fillStyle(0x4a4a55);
+    d.fillStyle(0x172d38).fillRoundedRect(x - 22, y - 40, 44, 9, 2);       // keyboard
+    d.fillStyle(0x4d9e9b);
     for (let k = 0; k < 6; k++) d.fillRect(x - 19 + k * 7, y - 38, 5, 2);
-    d.fillStyle(0xf2f2f2).fillRect(x + 28, y - 44, 9, 10);                 // mug
-    d.fillStyle(0x6b4a2f).fillRect(x + 29, y - 43, 7, 3);
-    d.fillStyle(0x3a3a3a).fillRect(x - 98, y - 58, 3, 18);                 // lamp
-    d.fillStyle(0xe8c547).fillTriangle(x - 104, y - 58, x - 88, y - 58, x - 96, y - 66);
+    d.fillStyle(0xe7c48c).fillRect(x + 28, y - 44, 9, 10);                 // mug
+    d.fillStyle(0x8b5c3d).fillRect(x + 29, y - 43, 7, 3);
+    d.fillStyle(0x283b43).fillRect(x - 98, y - 58, 3, 18);                 // lamp
+    d.fillStyle(0xf4ae55).fillTriangle(x - 104, y - 58, x - 88, y - 58, x - 96, y - 66);
     this.lamps.push(this.add.ellipse(x - 96, y - 52, 120, 60, 0xffd27a, 0).setDepth(9_001));
     // the name plate on the desk front, and under it the XP and energy bars
-    this.plates[p.plate] = this.add.text(x, y - 6, p.plate, TXT(9, "#3a2f22", { backgroundColor: "#f4e6c8", padding: { x: 4, y: 1 } }))
+    this.plates[p.plate] = this.add.text(x, y - 6, p.plate, TXT(9, "#d7fff5", { backgroundColor: "#173846", padding: { x: 5, y: 2 } }))
       .setOrigin(0.5, 1).setDepth(y + 4);
     this.bars[p.plate] = this.add.graphics().setDepth(y + 4);
     if (p !== MANAGER_PLACE) {
@@ -288,12 +288,12 @@ export class OfficeScene extends Phaser.Scene {
   paintSky() {
     const h = new Date().getHours();
     const dark = h >= 21 || h < 6, dusk = (h >= 18 && h < 21) || (h >= 6 && h < 8);
-    const sky = dark ? 0x14203a : dusk ? 0xf0a35e : 0x8ecdf0;
+    const sky = dark ? 0x101d36 : dusk ? 0x8f5570 : 0x285878;
     if (!this.sky) return;
     this.sky.clear();
     for (const x0 of [24, 152]) {
       this.sky.fillStyle(sky).fillRect(x0, 14, 110, 76);
-      this.sky.fillStyle(dark ? 0x0b1222 : 0x6d7f8f);
+      this.sky.fillStyle(dark ? 0x071321 : dusk ? 0x3a2b48 : 0x173a51);
       [[8, 46, 18, 30], [30, 36, 16, 40], [50, 54, 22, 22], [76, 40, 18, 36], [96, 50, 14, 26]]
         .forEach(([dx, y, w, hh]) => this.sky.fillRect(x0 + dx, y, w, hh));
       if (dark) { this.sky.fillStyle(0xfff4c2); [[12, 24], [62, 20], [92, 30]].forEach(([dx, y]) => this.sky.fillRect(x0 + dx, y, 2, 2)); }
@@ -379,7 +379,7 @@ export class OfficeScene extends Phaser.Scene {
 
   float(at: Pt, text: string, color = "#1d1d1f", icon?: string) {
     const objs: Phaser.GameObjects.GameObject[] = [];
-    const t = this.add.text(at.x, at.y, text, TXT(13, color, { fontStyle: "bold", backgroundColor: "#ffffffd9", padding: { x: 4, y: 2 } }))
+    const t = this.add.text(at.x, at.y, text, TXT(13, color, { fontStyle: "bold", backgroundColor: "#102b38e8", padding: { x: 5, y: 3 } }))
       .setOrigin(0.5, 1).setDepth(10_001);
     objs.push(t);
     if (icon) objs.push(this.add.image(at.x - t.width / 2 - 14, at.y - 10, icon).setScale(SCALE).setDepth(10_001));
