@@ -33,12 +33,12 @@ const TXT = (size: number, color: string, extra: object = {}) =>
 type Place = { desk: Pt; seat: Pt; visit: Pt; plate: string };
 const placeAt = (x: number, y: number, plate: string): Place =>
   ({ desk: { x, y }, seat: { x, y: y - 22 }, visit: { x: x + 128, y: y - 4 }, plate });
-const TRADER_PLACES: Place[] = [placeAt(220, 360, "TRADER 1"), placeAt(500, 360, "TRADER 2")];
-const MANAGER_PLACE: Place = { ...placeAt(822, 300, "MANAGER"), visit: { x: 726, y: 296 } };
+const TRADER_PLACES: Place[] = [placeAt(210, 482, "TRADER 1"), placeAt(474, 456, "TRADER 2")];
+const MANAGER_PLACE: Place = { ...placeAt(824, 454, "MANAGER"), visit: { x: 736, y: 450 } };
 const DOOR: Pt = { x: 660, y: 592 }, BOSS_SPOT: Pt = { x: 640, y: 470 };
 // seats around the meeting table (table spans x 378-522, y 468-564): the chair, then the sides
 const MEETING_SEATS: Record<string, Pt> = {
-  manager: { x: 450, y: 470 }, "trader-1": { x: 352, y: 540 }, "trader-2": { x: 548, y: 540 }, boss: { x: 450, y: 590 },
+  manager: { x: 520, y: 412 }, "trader-1": { x: 392, y: 516 }, "trader-2": { x: 650, y: 516 }, boss: { x: 520, y: 590 },
 };
 
 class Actor {
@@ -161,6 +161,7 @@ export class OfficeScene extends Phaser.Scene {
   meeting = false;
   alarm!: Phaser.GameObjects.Graphics;
   alarmText?: Phaser.GameObjects.Text;
+  cover!: Phaser.GameObjects.Image;
   nameOf: (id: string) => string = (id) => id;
   ready!: Promise<void>;
   private resolveReady!: () => void;
@@ -173,6 +174,7 @@ export class OfficeScene extends Phaser.Scene {
   preload() {
     this.load.spritesheet("indoor", "/kenney/indoor.png", { frameWidth: 16, frameHeight: 16, spacing: 1 });
     this.load.spritesheet("people", "/kenney/people.png", { frameWidth: 16, frameHeight: 16 });
+    this.load.image("office-cover", "/assets/office-cover.png");
   }
 
   create() {
@@ -190,6 +192,21 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   drawRoom() {
+    // The cover is the room's visual north star: the event stream animates on top
+    // of this shared research space instead of rendering a separate map language.
+    this.cover = this.add.image(W / 2, H / 2, "office-cover").setDisplaySize(W, H).setDepth(-100);
+    this.add.rectangle(W / 2, H - 12, W, 24, 0x071321, 0.38).setDepth(-50);
+    this.sky = this.add.graphics().setDepth(-90).setVisible(false);
+    this.night = this.add.graphics().setDepth(9_000);
+    this.alarm = this.add.graphics().setDepth(9_002);
+    this.screenText = this.add.text(0, 0, "", TXT(1, "#54e1db")).setVisible(false);
+    this.whiteboard = this.add.text(0, 0, "", TXT(1, "#e6f3ef")).setVisible(false);
+    this.clock = this.add.text(0, 0, "", TXT(1, "#f4ae55")).setVisible(false);
+    this.paintSky();
+    return;
+
+    /* Legacy procedural room retained below as a reference while the cover-led
+       renderer is iterated. It is intentionally unreachable. */
     const g = this.add.graphics().setDepth(-20);
     for (let y = 130; y < H; y += 22) {                                     // floor: warm planks
       g.fillStyle(((y / 22) | 0) % 2 ? 0x9a704f : 0xa77b55).fillRect(0, y, W, 22);
