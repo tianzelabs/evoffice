@@ -1,42 +1,31 @@
 <!doctype html>
-<html lang="zh">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EvOffice</title>
-</head>
-<body>
-  <header>
-    <h1>EvOffice</h1>
-    <span class="eyebrow">EYE OF GOD · LIVING RESEARCH ROOM</span>
-    <span id="price">BTC-PERP …</span>
-    <span class="muted" id="budget"></span>
-    <span class="muted" id="me"></span>
-    <span class="replay-ctl"><input type="date" id="replay-day"><select id="replay-speed"><option value="30">×30</option><option value="60" selected>×60</option><option value="240">×240</option></select><button id="replay-go">▶ replay</button><a id="live-link" href="/" hidden>● back to live</a></span>
-    <a class="muted" href="/text">text view</a>
-  </header>
-  <main>
-    <div id="room"></div>
-    <aside>
-      <section class="chat">
-        <h2>Public channel · boss console</h2>
-        <div id="log"></div>
-        <form id="say"><input id="text" placeholder="Speak as the boss" autocomplete="off" maxlength="2000"><button>Send</button></form>
-      </section>
-      <section>
-        <h2>Research objective · minus → plus</h2>
-        <div id="objective" class="muted">…</div>
-        <h2>Season <span id="season-name" class="muted"></span></h2>
-        <div id="season" class="muted">…</div>
-        <h2>Iteration — did the change help?</h2>
-        <div id="iterations" class="muted">…</div>
-        <h2>Leaderboard</h2>
-        <table id="board"><thead><tr><th>trader</th><th>trades</th><th>net</th><th>bps</th><th>open</th></tr></thead><tbody></tbody></table>
-        <h2>Per strategy version</h2>
-        <table id="versions"><thead><tr><th>trader · version</th><th>trades</th><th>net</th><th>bps</th></tr></thead><tbody></tbody></table>
-      </section>
-    </aside>
-  </main>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23071a26'/%3E%3Cpath d='M32 8 56 32 32 56 8 32Z' fill='%23f4ae55'/%3E%3Cpath d='m32 18 14 14-14 14-14-14Z' fill='%2352e1dc'/%3E%3C/svg%3E" />
+    <title>EvOffice · Modern Research Room</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">◆</span><span>EvOffice</span><span class="brand-sub">EYE OF GOD / LIVING RESEARCH ROOM</span></div>
+        <div id="market" class="market">BTC-PERP · connecting…</div>
+        <div class="top-actions"><span id="clock">--:--</span><button id="replay">replay</button></div>
+      </header>
+      <main class="workspace">
+        <section class="stage-shell">
+          <div id="stage" aria-label="EvOffice research room"></div>
+          <div class="stage-caption"><span>EVOLUTION LAB</span><span id="stage-status">LIVE / EVENT-SOURCED</span></div>
+        </section>
+        <aside class="control-panel">
+          <section class="panel-section room-status"><div class="section-kicker">ROOM STATUS</div><div id="selected-name" class="selected-name">Select a facility</div><div id="selected-detail" class="selected-detail">Click the data wall, commons table, workstation or glass office.</div></section>
+          <section class="panel-section chat-section"><div class="section-kicker">PUBLIC CHANNEL / BOSS CONSOLE</div><div id="chat-log" class="chat-log"></div><form id="say"><input id="say-text" placeholder="Speak as the boss" autocomplete="off" maxlength="2000" /><button>send</button></form></section>
+          <section class="panel-section metrics"><div class="section-kicker">RESEARCH SIGNALS</div><div class="metric-grid"><div><span>season</span><strong id="season">—</strong></div><div><span>iteration</span><strong id="iteration">—</strong></div><div><span>budget</span><strong id="budget">—</strong></div><div><span>agents</span><strong id="agents">—</strong></div></div></section>
+          <section class="panel-section leaderboard"><div class="section-kicker">LEADERBOARD</div><div id="leaderboard-rows"></div></section>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

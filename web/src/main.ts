@@ -1,109 +1,45 @@
-const history_ = window.history;
-// Boot: replay the office's history into the room without animation, then go live.
-import * as Phaser from "phaser";
-import { allEvents, getJSON, stream, type OfficeEvent } from "./net";
-import { OfficeScene, W, H } from "./office";
-import { addToLog, displayName, initPanel, learnNames, refreshBoard, refreshBudget, refreshIterations, refreshObjective, refreshSeason, setCareers, setPrice } from "./panel";
+import { history, json, say, subscribe, type OfficeEvent } from "./api";
+import { ModernOffice } from "./world";
 import "./style.css";
 
-const scene = new OfficeScene();
-(window as any).office = scene;   // for looking at the room from the browser console; it can only animate, never write
-new Phaser.Game({
-  type: Phaser.AUTO, parent: "room", width: W, height: H, backgroundColor: "#d9cbb4",
-  pixelArt: true, scene, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_HORIZONTALLY },
-});
+const stage = document.querySelector<HTMLElement>("#stage")!;
+const office = new ModernOffice(stage);
+const selectedName = document.querySelector<HTMLElement>("#selected-name")!;
+const selectedDetail = document.querySelector<HTMLElement>("#selected-detail")!;
+const chatLog = document.querySelector<HTMLElement>("#chat-log")!;
+const leaderboardRows = document.querySelector<HTMLElement>("#leaderboard-rows")!;
 
-let careerTimer: number | undefined;
-async function careers() {
-  clearTimeout(careerTimer);                  // spend events come in bursts; refresh once they settle
-  careerTimer = window.setTimeout(async () => {
-    try {
-      const [prog, budgets] = await Promise.all([getJSON("/progress"), getJSON("/budget")]);
-      scene.setProgress(prog, budgets);
-      setCareers(prog);
-    } catch { /* offline */ }
-  }, 800);
+function addChat(event: OfficeEvent) {
+  if (event.kind !== "say" && event.kind !== "alert") return;
+  const line = document.createElement("div"); line.className = "chat-line";
+  const who = event.actor === "manager" ? "manager" : event.actor === "boss" ? "boss" : event.actor;
+  line.innerHTML = `<strong>${who}</strong> ${String(event.payload?.text ?? event.payload?.message ?? "")}`;
+  chatLog.appendChild(line); while (chatLog.children.length > 80) chatLog.firstElementChild?.remove(); chatLog.scrollTop = chatLog.scrollHeight;
 }
 
-async function season() {
-  try { const s = await refreshSeason(); scene.setTrophies(s.trophies); } catch { /* offline */ }
-}
-
-async function board() { try { scene.setBoard(await refreshBoard()); } catch { /* offline */ } }
-
-async function market() {
+async function refresh() {
   try {
-    const [p, bars] = await Promise.all([getJSON("/price"), getJSON("/bars?minutes=90")]);
-    setPrice(`BTC-PERP ${p.bid.toFixed(0)}/${p.ask.toFixed(0)} · funding ${(p.funding_per_hour * 1e4).toFixed(3)} bp/h`);
-    scene.setChart(bars, p.price);
-  } catch { setPrice("BTC feed stale"); }
+    const board = await json<any>("/leaderboard");
+    const rows = board.by_employee ?? [];
+    office.setBoard(rows);
+    leaderboardRows.innerHTML = rows.slice(0, 6).map((r: any) => `<div class="leader-row"><span class="name">${r.name ?? r.employee}</span><span>${r.trades ?? 0}t</span><span class="${Number(r.net_pnl ?? 0) >= 0 ? "positive" : "negative"}">${r.net_pnl ?? 0}</span></div>`).join("");
+    document.querySelector("#agents")!.textContent = String(rows.length);
+  } catch { /* server may be offline during local visual work */ }
+  try { const price = await json<any>("/price"); document.querySelector("#market")!.textContent = `BTC-PERP ${price.bid.toFixed(0)} / ${price.ask.toFixed(0)} · funding ${(price.funding_per_hour * 1e4).toFixed(3)} bp/h`; } catch { /* offline */ }
+  try { const budget = await json<any>("/budget"); document.querySelector("#budget")!.textContent = `manager $${Number(budget.manager?.spent_usd ?? 0).toFixed(2)}`; } catch { /* offline */ }
 }
 
 (async () => {
-  await initPanel();
-  await scene.ready;
-  try { learnNames(await getJSON("/employees")); } catch { /* offline: ids until names arrive */ }
-  scene.nameOf = displayName;
-  const history = await allEvents();
-  const params = new URLSearchParams(location.search);
-  const day = params.get("replay");
-  wireReplayControls(day);
-  if (day) {
-    history_.replaceState(null, "", location.pathname);    // a replay is one-shot: refreshing goes back to live
-    replay(history, day, Number(params.get("speed") ?? 60)); board(); market(); season(); careers(); return;
-  }
-  for (const e of history) { scene.apply(e, false); addToLog(e); }
-  const last = history.length ? history[history.length - 1].id : 0;
-  stream(last, (e) => {
-    scene.apply(e, true);
-    addToLog(e);
-    if (["open", "close", "fire", "hire"].includes(e.kind)) board();
-    if (e.kind === "spend") refreshBudget();
-    if (["version", "evaluation", "close", "fire"].includes(e.kind)) refreshIterations().catch(() => {});
-    if (["level", "badge", "evaluation", "close", "version", "spend", "name"].includes(e.kind)) careers();
-    if (["award", "evaluation", "close", "version"].includes(e.kind)) season();
-    if (["backtest", "evaluation", "close", "open", "account"].includes(e.kind)) refreshObjective().catch(() => {});
-  });
-  board(); market(); refreshBudget(); refreshIterations().catch(() => {}); careers(); season();
-  refreshObjective().catch(() => {});
-  setInterval(season, 120_000);
-  setInterval(careers, 60_000);
-  setInterval(market, 15_000);
-  setInterval(() => refreshObjective().catch(() => {}), 30_000);      // equity marks to market
-  setInterval(board, 60_000);
+  await office.init((facility) => { selectedName.textContent = facility.name; selectedDetail.textContent = facility.detail; });
+  try {
+    const employees = await json<any[]>("/employees"); office.setNames(Object.fromEntries(employees.map((e) => [e.employee ?? e.id, e.name ?? e.employee ?? e.id])));
+  } catch { /* local visual mode */ }
+  let events: OfficeEvent[] = [];
+  try { events = await history(); for (const event of events) { office.apply(event, false); addChat(event); } } catch { /* local visual mode */ }
+  const last = events.at(-1)?.id ?? 0;
+  subscribe(last, (event) => { office.apply(event, true); addChat(event); });
+  await refresh(); setInterval(refresh, 20_000);
 })();
 
-// ---------- replay: a day of the office, compressed ----------
-function wireReplayControls(day: string | null) {
-  const input = document.querySelector<HTMLInputElement>("#replay-day")!;
-  const speed = document.querySelector<HTMLSelectElement>("#replay-speed")!;
-  input.value = day ?? new Date().toISOString().slice(0, 10);
-  if (day) {
-    speed.value = new URLSearchParams(location.search).get("speed") ?? "60";
-    document.querySelector<HTMLElement>("#live-link")!.hidden = false;
-  }
-  document.querySelector("#replay-go")!.addEventListener("click", () => {
-    location.search = `?replay=${input.value}&speed=${speed.value}`;
-  });
-}
-
-function replay(history: OfficeEvent[], day: string, speed: number) {
-  // the state before the day is restored silently; the day itself plays at `speed` x real time
-  const before = history.filter((e) => e.ts.slice(0, 10) < day);
-  const today = history.filter((e) => e.ts.slice(0, 10) === day);
-  for (const e of before) scene.apply(e, false);
-  const banner = document.createElement("div");
-  banner.id = "replay-banner";
-  document.body.appendChild(banner);
-  if (!today.length) { banner.textContent = `REPLAY ${day}: nothing happened that day`; return; }
-  const t0 = Date.parse(today[0].ts);
-  today.forEach((e) => {
-    const at = (Date.parse(e.ts) - t0) / speed;
-    window.setTimeout(() => {
-      scene.apply(e, true);
-      addToLog(e);
-      banner.textContent = `REPLAY ${day} ×${speed} · ${e.ts.slice(11, 19)} UTC`;
-    }, at);
-  });
-  window.setTimeout(() => { banner.textContent = `REPLAY ${day}: end of the day`; }, (Date.parse(today[today.length - 1].ts) - t0) / speed + 2000);
-}
+document.querySelector<HTMLFormElement>("#say")!.addEventListener("submit", async (event) => { event.preventDefault(); const input = document.querySelector<HTMLInputElement>("#say-text")!; const text = input.value.trim(); if (!text) return; if (await say(text)) input.value = ""; });
+document.querySelector("#replay")!.addEventListener("click", () => { window.location.href = "/?replay=1"; });
