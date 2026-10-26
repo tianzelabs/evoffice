@@ -43,7 +43,7 @@ Decided with the user on 2026-10-08, revised 2026-10-09 after spikes 1–5
 | server | Python + FastAPI | same language as the agents; `settlement.py` / `market.py` and their tests carry over unchanged |
 | database | SQLite, WAL | one writer, little data, no operations |
 | realtime | **SSE** server → clients; every write is an HTTP POST | only the server pushes, so WebSocket's two-way channel buys nothing |
-| frontend | Vite + TypeScript + **Phaser 4**, chat and leaderboard as plain DOM over the canvas | text, input and scrolling are what HTML is for; the canvas draws the room |
+| frontend | Vite + TypeScript + **PixiJS 8**, with a DOM control shell around the canvas | the office is a fresh scene graph: facilities, actors, hit zones and animation are separate from chat/metrics |
 | art | **Kenney** packs (CC0) | free, consistent, no licence questions |
 | manager model | OpenRouter, chosen by measurement when P2 starts | never estimated (an estimate was once off 8x) |
 | Python tooling | uv, ruff, pytest | |
@@ -53,7 +53,41 @@ Reference read, not adopted: a16z AI Town (MIT) for how characters move and how
 conversation is shown — its Convex/TypeScript backend cannot host a Python RLM
 and its chats are 1:1 by proximity, not one public room.
 
+## Frontend reset — EvOffice modern room
+
+The current `web/` application is a clean replacement for the earlier canvas
+renderer. The old renderer and its asset pipeline are intentionally removed;
+there is no legacy frontend kept beside the new one.
+
+- `src/world.ts` owns the 2.5D room scene: window wall, city silhouette, data
+  wall, manager glass office, commons table, studio, plants and lighting.
+- Every facility has a real hit zone and selection state. Agent views are
+  separate scene objects so positions, roles and movement can come from the
+  event stream rather than being painted into a background image.
+- `src/main.ts` and `src/style.css` own the modern control shell: public boss
+  console, room status, research metrics and leaderboard.
+- `src/api.ts` is the only browser-side transport layer: history, SSE and boss
+  messages remain independent from the renderer.
+
+The cover PNG is a visual reference for the composition, not a runtime
+background. The scene is reconstructed as interactive geometry so the office
+can respond to hires, state changes, meetings and chat.
+
 ## The one principle: the server is the world, everyone else is a client
+
+## Repository boundaries
+
+The repository is split by responsibility:
+
+- `server/` is the authoritative office world and API;
+- `agents/` contains manager/trader clients and their local loops;
+- `web/` is the interactive renderer and browser client;
+- `research/` contains isolated experiment implementations and schemas;
+- `docs/` contains research cases, protocols, spikes, and architecture;
+- `tests/` contains executable checks for the office runtime.
+
+Research code must not silently become production runtime code. It enters the
+office only through an explicit adapter and a measured experiment boundary.
 
 ```
                      ┌──────────────────── office server ────────────────────┐

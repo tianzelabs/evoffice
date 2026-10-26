@@ -51,6 +51,7 @@ failure mode, not the goal.
 | `agents/trader/` | the RLM trader and its always-on watcher |
 | `agents/manager/` | the manager: a strong model with authority over the trader |
 | `web/` | the pixel office, a renderer of the event stream |
+| `research/` | isolated research implementations and experiment contracts |
 | `systemd/` | one user unit per process |
 | `tests/` | |
 | `docs/architecture.md` | how the pieces fit, and why |
