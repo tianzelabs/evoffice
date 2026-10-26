@@ -1,5 +1,11 @@
 # Architecture
 
+This is the **The Living Office** layer inside the wider **Eye of God** research
+system. Eye of God supplies the market-data substrate and god's-eye operational
+audit; The Living Office supplies the persistent social world where the human,
+manager, and AI workers coordinate. The office is a research instrument, not a
+standalone trading product.
+
 Decided with the user on 2026-10-08, revised 2026-10-09 after spikes 1–5
 (`docs/spikes/`). The design history lives in the harness repo
 (`eye-of-god-on-traderme-agent-world`, `todo/pixel-office.md`).

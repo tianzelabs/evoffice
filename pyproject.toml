@@ -1,7 +1,7 @@
 [project]
 name = "pixel-office"
 version = "0.0.0"
-description = "Recursive Commons: a gamified pixel office for studying AI collectives and recursive analytics."
+description = "Eye of God — The Living Office: a hobby research project for AI collectives and recursive analytics."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

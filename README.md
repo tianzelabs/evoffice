@@ -1,6 +1,6 @@
-# Recursive Commons
+# Eye of God — The Living Office
 
-**A gamified pixel office for studying AI collectives and recursive analytics.**
+**A gamified pixel office inside Eye of God for studying AI collectives and recursive analytics.**
 
 The office is a small, observable research environment: a manager, one or more
 RLM (Recursive Language Model) workers, and a human boss share one public room.
@@ -12,12 +12,18 @@ The current market simulation is a deliberately concrete analytics sandbox, not 
 research goal. It gives the system noisy data, delayed feedback, costs, uncertainty,
 and a scoreboard without claiming that a paper strategy is ready for real trading.
 
-The project is named **Recursive Commons** because the two questions are coupled:
-how humans and AI form a shared working community, and how recursive language-model
-work changes when it can manipulate an analytics environment rather than merely
-answer a prompt.
+**Eye of God** is the umbrella research system: it provides the market-data
+substrate, the god's-eye audit, and the operating discipline. **The Living Office**
+is its social experiment: a persistent room where a human boss, manager, and AI
+workers coordinate in public and leave a measurable history.
 
-Research protocol: [Research case](docs/research-case.md).
+The two research cases are intentionally separate:
+
+- [Case A — AI community evolution](docs/case-ai-community.md)
+- [Case B — RLM for analytics](docs/case-rlm-analytics.md)
+
+Gamification is the shared method layer, not a third blended hypothesis:
+[gamification protocol](docs/gamification-protocol.md).
 
 This is a personal **hobby research project** and an evolving lab notebook, not a
 commercial product, installable package, or financial service. The GitHub snapshot
@@ -54,8 +60,8 @@ The v0 office is running as a research prototype: server, public chat, manager,
 RLM trader, held-out evaluator, seasons, XP, leaderboard, and pixel frontend are
 implemented. The code is still experimental and the research claims are open.
 
-See `docs/architecture.md` for the system design and
-`docs/research-case.md` for the hypotheses, measures, and experiment loop.
+See `docs/architecture.md` for the system design and the three research documents
+above for the separate hypotheses, measures, and experiment loops.
 
 ## Where things run
 
