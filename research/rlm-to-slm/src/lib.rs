@@ -171,3 +171,130 @@ pub struct Trajectory {
     pub model: String,
     pub steps: Vec<TrajectoryStep>,
 }
+
+impl Trajectory {
+    /// Check the invariants required before a trajectory can enter a training
+    /// set. This validates the record, not the underlying market calculation;
+    /// the executor/evaluator remains responsible for that.
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        if self.schema_version == 0 {
+            errors.push("schema_version must be positive".to_owned());
+        }
+        if self.run_id.is_empty() {
+            errors.push("run_id must not be empty".to_owned());
+        }
+        if self.steps.is_empty() {
+            errors.push("trajectory must contain at least one step".to_owned());
+        }
+
+        for (expected_step, step) in self.steps.iter().enumerate() {
+            if step.step != expected_step as u32 {
+                errors.push(format!(
+                    "step {} is numbered {}, expected {}",
+                    expected_step, step.step, expected_step
+                ));
+            }
+            if step.state.run_id != self.run_id {
+                errors.push(format!("step {} has a different run_id", step.step));
+            }
+            for check in &step.result.numeric_checks {
+                if !check.value.is_finite() {
+                    errors.push(format!("step {} has a non-finite numeric value", step.step));
+                }
+                if let Some(reference) = check.reference_value {
+                    if !reference.is_finite() {
+                        errors.push(format!(
+                            "step {} has a non-finite reference value",
+                            step.step
+                        ));
+                    }
+                }
+                if let Some(error) = check.absolute_error {
+                    if error.is_sign_negative() || !error.is_finite() {
+                        errors.push(format!("step {} has an invalid absolute error", step.step));
+                    }
+                }
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> Trajectory {
+        Trajectory {
+            schema_version: 1,
+            run_id: "run-001".to_owned(),
+            model: "teacher-rlm".to_owned(),
+            steps: vec![TrajectoryStep {
+                step: 0,
+                state: WorkspaceState {
+                    run_id: "run-001".to_owned(),
+                    task_id: "rolling-volatility".to_owned(),
+                    market_window: DataWindow {
+                        start_ms: 1,
+                        end_ms: 2,
+                        rows: 2,
+                        source: "paper-btc-1m".to_owned(),
+                        held_out: false,
+                    },
+                    objects: vec![],
+                    recent_actions: vec![],
+                    remaining_budget: Budget {
+                        remaining_queries: 10,
+                        remaining_compute_ms: 1_000,
+                        max_recursion_depth: 4,
+                    },
+                },
+                teacher_action: Action::Profile {
+                    source: "bars".to_owned(),
+                },
+                result: Observation {
+                    created_objects: vec!["bars-profile".to_owned()],
+                    numeric_checks: vec![NumericCheck {
+                        name: "row_count".to_owned(),
+                        value: 2.0,
+                        reference_value: Some(2.0),
+                        absolute_error: Some(0.0),
+                    }],
+                    error: None,
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn trajectory_round_trips_as_structured_json() {
+        let original = sample();
+        let encoded = serde_json::to_string(&original).expect("serialize trajectory");
+        let decoded: Trajectory = serde_json::from_str(&encoded).expect("deserialize trajectory");
+        assert_eq!(decoded.run_id, original.run_id);
+        assert!(decoded.validate().is_ok());
+        assert!(encoded.contains("\"op\":\"profile\""));
+    }
+
+    #[test]
+    fn invalid_step_order_is_rejected() {
+        let mut trajectory = sample();
+        trajectory.steps[0].step = 3;
+        let errors = trajectory.validate().expect_err("invalid step must fail");
+        assert!(errors.iter().any(|error| error.contains("expected 0")));
+    }
+
+    #[test]
+    fn invalid_numeric_values_are_rejected() {
+        let mut trajectory = sample();
+        trajectory.steps[0].result.numeric_checks[0].value = f64::NAN;
+        assert!(trajectory.validate().is_err());
+    }
+}
