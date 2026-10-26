@@ -22,6 +22,7 @@ import type { OfficeEvent } from "./net";
 
 export const W = 960, H = 600;
 type Pt = { x: number; y: number };
+type Facility = { id: string; name: string; rect: { x: number; y: number; w: number; h: number }; detail: string };
 const T = 16 * SCALE;                                        // one Kenney tile on screen: 48 px
 const IN = (c: number, r: number) => r * 27 + c;             // frame in the indoor sheet (27 columns)
 const PEOPLE_FRAME: Record<string, number> = { "trader-1": 0, "trader-2": 1, manager: 2, boss: 3 };
@@ -40,6 +41,15 @@ const DOOR: Pt = { x: 660, y: 592 }, BOSS_SPOT: Pt = { x: 640, y: 470 };
 const MEETING_SEATS: Record<string, Pt> = {
   manager: { x: 520, y: 412 }, "trader-1": { x: 392, y: 516 }, "trader-2": { x: 650, y: 516 }, boss: { x: 520, y: 590 },
 };
+const FACILITIES: Facility[] = [
+  { id: "board", name: "COLLECTIVE BOARD", rect: { x: 280, y: 8, w: 360, h: 132 }, detail: "Shared leaderboard and live office state." },
+  { id: "whiteboard", name: "MANAGER WHITEBOARD", rect: { x: 640, y: 10, w: 220, h: 120 }, detail: "The latest instruction from the manager." },
+  { id: "trader-1-desk", name: "TRADER 1 DESK", rect: { x: 70, y: 300, w: 245, h: 126 }, detail: "Strategy screen, code monitor, budget and XP." },
+  { id: "trader-2-desk", name: "TRADER 2 DESK", rect: { x: 350, y: 300, w: 245, h: 126 }, detail: "Strategy screen, code monitor, budget and XP." },
+  { id: "manager-office", name: "MANAGER GLASS OFFICE", rect: { x: 690, y: 145, w: 264, h: 270 }, detail: "Manager workspace and command point." },
+  { id: "commons", name: "COMMONS TABLE", rect: { x: 290, y: 450, w: 330, h: 116 }, detail: "Shared meeting area for stand-ups and decisions." },
+  { id: "coffee", name: "COFFEE CORNER", rect: { x: 420, y: 145, w: 170, h: 85 }, detail: "A reset point between research cycles." },
+];
 
 class Actor {
   sprite: Phaser.GameObjects.Image;
@@ -49,6 +59,7 @@ class Actor {
   dots?: Phaser.GameObjects.Text;
   walking = false;
   thinking = false;
+  facing: "left" | "right" = "right";
   frame = 0;
   private queue: Promise<void> = Promise.resolve();
 
@@ -81,7 +92,7 @@ class Actor {
     return new Promise((done) => {
       const d = Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, p.x, p.y);
       if (d < 4) { this.sync(); return done(); }
-      this.sprite.setFlipX(p.x < this.sprite.x);
+      this.face(p);
       this.walking = true;
       this.scene.tweens.add({
         targets: this.sprite, x: p.x, y: p.y, duration: (d / 120) * 1000, ease: "Sine.easeInOut",
@@ -91,7 +102,10 @@ class Actor {
     });
   }
 
-  face(p: Pt) { this.sprite.setFlipX(p.x < this.sprite.x); }
+  face(p: Pt) {
+    this.facing = p.x < this.sprite.x ? "left" : "right";
+    this.sprite.setFlipX(this.facing === "left");
+  }
 
   step() {
     if (this.walking) { this.frame ^= 1; this.sprite.setScale(SCALE, this.frame ? SCALE * 0.94 : SCALE); return; }
@@ -161,7 +175,9 @@ export class OfficeScene extends Phaser.Scene {
   meeting = false;
   alarm!: Phaser.GameObjects.Graphics;
   alarmText?: Phaser.GameObjects.Text;
-  cover!: Phaser.GameObjects.Image;
+  facilityHighlight?: Phaser.GameObjects.Graphics;
+  facilityCard?: Phaser.GameObjects.Container;
+  selectedFacility?: Facility;
   nameOf: (id: string) => string = (id) => id;
   ready!: Promise<void>;
   private resolveReady!: () => void;
@@ -174,12 +190,12 @@ export class OfficeScene extends Phaser.Scene {
   preload() {
     this.load.spritesheet("indoor", "/kenney/indoor.png", { frameWidth: 16, frameHeight: 16, spacing: 1 });
     this.load.spritesheet("people", "/kenney/people.png", { frameWidth: 16, frameHeight: 16 });
-    this.load.image("office-cover", "/assets/office-cover.png");
   }
 
   create() {
     makeTextures(this);
     this.drawRoom();
+    this.installFacilityInteractions();
     this.time.addEvent({ delay: 160, loop: true, callback: () => Object.values(this.actors).forEach((a) => a?.step()) });
     this.time.addEvent({ delay: 400, loop: true, callback: () => { this.tick++; Object.values(this.actors).forEach((a) => a?.tickDots(this.tick)); this.drawCode(); } });
     this.time.addEvent({ delay: 30_000, loop: true, callback: () => this.paintSky() });
@@ -192,46 +208,39 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   drawRoom() {
-    // The cover is the room's visual north star: the event stream animates on top
-    // of this shared research space instead of rendering a separate map language.
-    this.cover = this.add.image(W / 2, H / 2, "office-cover").setDisplaySize(W, H).setDepth(-100);
-    this.add.rectangle(W / 2, H - 12, W, 24, 0x071321, 0.38).setDepth(-50);
-    this.sky = this.add.graphics().setDepth(-90).setVisible(false);
-    this.night = this.add.graphics().setDepth(9_000);
-    this.alarm = this.add.graphics().setDepth(9_002);
-    this.screenText = this.add.text(0, 0, "", TXT(1, "#54e1db")).setVisible(false);
-    this.whiteboard = this.add.text(0, 0, "", TXT(1, "#e6f3ef")).setVisible(false);
-    this.clock = this.add.text(0, 0, "", TXT(1, "#f4ae55")).setVisible(false);
-    this.paintSky();
-    return;
-
-    /* Legacy procedural room retained below as a reference while the cover-led
-       renderer is iterated. It is intentionally unreachable. */
     const g = this.add.graphics().setDepth(-20);
-    for (let y = 130; y < H; y += 22) {                                     // floor: warm planks
+    for (let y = 146; y < H; y += 22) {                                     // floor: warm planks
       g.fillStyle(((y / 22) | 0) % 2 ? 0x9a704f : 0xa77b55).fillRect(0, y, W, 22);
       g.fillStyle(0x76533d);
       g.fillRect(0, y, W, 2);
       for (let x = (((y / 22) | 0) % 3) * 50; x < W; x += 150) g.fillRect(x, y, 2, 22);
     }
-    g.fillStyle(0x1b3042).fillRect(0, 0, W, 130);                         // deep blue wall
-    g.fillStyle(0x243e50).fillRect(0, 96, W, 34);                          // wainscot
-    g.fillStyle(0x102331).fillRect(0, 124, W, 8);                          // skirting
+    g.fillStyle(0x1b3042).fillRect(0, 0, W, 146);                         // deep blue wall
+    g.fillStyle(0x243e50).fillRect(0, 112, W, 34);                          // wainscot
+    g.fillStyle(0x102331).fillRect(0, 140, W, 8);                          // skirting
     this.sky = this.add.graphics().setDepth(-19);
-    for (const x0 of [24, 152]) {                                          // two windows with sills
+    for (const x0 of [20, 142]) {                                          // the tall window wall
       g.lineStyle(6, 0x8b6849, 1);
-      g.fillStyle(0x8b6849).fillRect(x0 - 6, 90, 122, 7);
+      g.fillStyle(0x8b6849).fillRect(x0 - 6, 124, 122, 7);
     }
     const frames = this.add.graphics().setDepth(-18);
-    for (const x0 of [24, 152]) {
-      frames.lineStyle(6, 0x8b6849, 1).strokeRect(x0, 14, 110, 76);
-      frames.lineBetween(x0 + 55, 14, x0 + 55, 90);
+    for (const x0 of [20, 142]) {
+      frames.lineStyle(6, 0x8b6849, 1).strokeRect(x0, 12, 110, 116);
+      frames.lineBetween(x0 + 55, 12, x0 + 55, 128);
+    }
+    // the cover's hanging lamps and upper research balcony, drawn as real scene objects
+    const architecture = this.add.graphics().setDepth(-12);
+    architecture.lineStyle(4, 0x0b1722, 0.95).lineBetween(0, 132, W, 132);
+    for (const x of [344, 470, 596]) {
+      architecture.lineStyle(2, 0x0b1722, 0.9).lineBetween(x, 0, x, 24);
+      architecture.fillStyle(0xf4ae55, 0.9).fillRoundedRect(x - 7, 22, 14, 16, 3);
+      architecture.fillStyle(0xffd27a, 0.12).fillCircle(x, 44, 28);
     }
     // the leaderboard screen
-    g.fillStyle(0x17232d).fillRoundedRect(292, 8, 330, 106, 6);
-    g.fillStyle(0x071a20).fillRect(300, 15, 314, 92);
-    this.add.text(310, 19, "COLLECTIVE BOARD", TXT(12, "#54e1db")).setDepth(-8);
-    this.screenText = this.add.text(310, 38, "", TXT(12, "#b4f5e5", { lineSpacing: 3 })).setDepth(-8);
+    g.fillStyle(0x17232d).fillRoundedRect(270, 8, 390, 126, 6);
+    g.fillStyle(0x071a20).fillRect(278, 15, 374, 110);
+    this.add.text(290, 19, "COLLECTIVE BOARD", TXT(12, "#54e1db")).setDepth(-8);
+    this.screenText = this.add.text(290, 40, "", TXT(12, "#b4f5e5", { lineSpacing: 3 })).setDepth(-8);
     // the manager's whiteboard: the latest instruction in the room
     g.fillStyle(0x304856).fillRoundedRect(640, 10, 220, 104, 4);
     g.fillStyle(0x10212d).fillRect(646, 16, 208, 92);
@@ -272,6 +281,48 @@ export class OfficeScene extends Phaser.Scene {
     this.paintSky();
   }
 
+  installFacilityInteractions() {
+    this.facilityHighlight = this.add.graphics().setDepth(8_900);
+    for (const facility of FACILITIES) {
+      const { x, y, w, h } = facility.rect;
+      this.add.zone(x + w / 2, y + h / 2, w, h)
+        .setSize(w, h).setInteractive({ useHandCursor: true })
+        .on("pointerover", () => this.highlightFacility(facility, 0.10))
+        .on("pointerout", () => this.highlightFacility(this.selectedFacility, 0.16))
+        .on("pointerdown", () => this.selectFacility(facility));
+    }
+  }
+
+  highlightFacility(facility?: Facility, alpha = 0.16) {
+    this.facilityHighlight?.clear();
+    if (!facility) return;
+    const { x, y, w, h } = facility.rect;
+    this.facilityHighlight?.lineStyle(2, 0x54e1db, 0.9).strokeRoundedRect(x, y, w, h, 8);
+    this.facilityHighlight?.fillStyle(0x54e1db, alpha).fillRoundedRect(x, y, w, h, 8);
+  }
+
+  facilityOccupants(id: string): string {
+    if (id === "trader-1-desk") return this.occupant["trader-1"] ? this.nameOf(this.occupant["trader-1"]) : "vacant";
+    if (id === "trader-2-desk") return this.occupant["trader-2"] ? this.nameOf(this.occupant["trader-2"]) : "vacant";
+    if (id === "manager-office") return this.occupant.manager ? this.nameOf(this.occupant.manager) : "vacant";
+    if (id === "commons") return this.meeting ? `${Object.values(this.actors).filter((a) => a?.meetingSeat).length} in meeting` : "available";
+    return "shared facility";
+  }
+
+  selectFacility(facility: Facility) {
+    this.selectedFacility = facility;
+    this.highlightFacility(facility);
+    this.facilityCard?.destroy();
+    const { x, y, w } = facility.rect;
+    const cardW = 270, cardH = 74, left = Math.min(W - cardW - 12, Math.max(12, x + w / 2 - cardW / 2));
+    const bg = this.add.graphics().fillStyle(0x102b38, 0.96).fillRoundedRect(0, 0, cardW, cardH, 8)
+      .lineStyle(2, 0x54e1db, 0.85).strokeRoundedRect(0, 0, cardW, cardH, 8);
+    const title = this.add.text(12, 9, facility.name, TXT(11, "#f4ae55", { fontStyle: "bold" }));
+    const status = this.add.text(12, 28, `occupant: ${this.facilityOccupants(facility.id)}`, TXT(10, "#d7fff5"));
+    const detail = this.add.text(12, 46, facility.detail, TXT(9, "#91c2bf", { wordWrap: { width: cardW - 24 } }));
+    this.facilityCard = this.add.container(left, Math.max(12, y - cardH - 8), [bg, title, status, detail]).setDepth(9_100);
+  }
+
   workplace(p: Place) {
     const { x, y } = p.desk;
     const g = this.add.graphics().setDepth(y - 60);
@@ -308,8 +359,8 @@ export class OfficeScene extends Phaser.Scene {
     const sky = dark ? 0x101d36 : dusk ? 0x8f5570 : 0x285878;
     if (!this.sky) return;
     this.sky.clear();
-    for (const x0 of [24, 152]) {
-      this.sky.fillStyle(sky).fillRect(x0, 14, 110, 76);
+    for (const x0 of [20, 142]) {
+      this.sky.fillStyle(sky).fillRect(x0, 14, 110, 114);
       this.sky.fillStyle(dark ? 0x071321 : dusk ? 0x3a2b48 : 0x173a51);
       [[8, 46, 18, 30], [30, 36, 16, 40], [50, 54, 22, 22], [76, 40, 18, 36], [96, 50, 14, 26]]
         .forEach(([dx, y, w, hh]) => this.sky.fillRect(x0 + dx, y, w, hh));
