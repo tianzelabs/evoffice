@@ -1,8 +1,8 @@
-# Eye of God — The Living Office
+# EvOffice
 
-**A gamified pixel office inside Eye of God for studying AI collectives and recursive analytics.**
+**A gamified office for studying AI collectives and recursive analytics.**
 
-![The Living Office cover](docs/office-cover.png)
+![EvOffice cover](docs/office-cover.png)
 
 The office is a small, observable research environment: a manager, one or more
 RLM (Recursive Language Model) workers, and a human boss share one public room.
@@ -14,10 +14,10 @@ The current market simulation is a deliberately concrete analytics sandbox, not 
 research goal. It gives the system noisy data, delayed feedback, costs, uncertainty,
 and a scoreboard without claiming that a paper strategy is ready for real trading.
 
-**Eye of God** is the umbrella research system: it provides the market-data
-substrate, the god's-eye audit, and the operating discipline. **The Living Office**
-is its social experiment: a persistent room where a human boss, manager, and AI
-workers coordinate in public and leave a measurable history.
+**EvOffice** is the office experiment inside **Eye of God**: a persistent room
+where a human boss, manager, and AI workers coordinate in public and leave a
+measurable history. Eye of God provides the market-data substrate, god's-eye
+audit, and operating discipline.
 
 The two research cases are intentionally separate:
 
