@@ -22,7 +22,6 @@ import type { OfficeEvent } from "./net";
 
 export const W = 960, H = 600;
 type Pt = { x: number; y: number };
-type Facility = { id: string; name: string; rect: { x: number; y: number; w: number; h: number }; detail: string };
 const T = 16 * SCALE;                                        // one Kenney tile on screen: 48 px
 const IN = (c: number, r: number) => r * 27 + c;             // frame in the indoor sheet (27 columns)
 const PEOPLE_FRAME: Record<string, number> = { "trader-1": 0, "trader-2": 1, manager: 2, boss: 3 };
@@ -41,15 +40,6 @@ const DOOR: Pt = { x: 660, y: 592 }, BOSS_SPOT: Pt = { x: 640, y: 470 };
 const MEETING_SEATS: Record<string, Pt> = {
   manager: { x: 520, y: 412 }, "trader-1": { x: 392, y: 516 }, "trader-2": { x: 650, y: 516 }, boss: { x: 520, y: 590 },
 };
-const FACILITIES: Facility[] = [
-  { id: "data-wall", name: "CENTRAL DATA WALL", rect: { x: 278, y: 92, w: 480, h: 214 }, detail: "Live collective board: rankings, signals and shared research state." },
-  { id: "left-window", name: "OBSERVATORY WINDOWS", rect: { x: 0, y: 0, w: 250, h: 420 }, detail: "The office looks out over the city and the research horizon." },
-  { id: "commons", name: "COMMONS TABLE", rect: { x: 290, y: 352, w: 420, h: 170 }, detail: "Shared meeting surface for stand-ups and collective decisions." },
-  { id: "manager-office", name: "MANAGER GLASS OFFICE", rect: { x: 760, y: 90, w: 200, h: 330 }, detail: "Manager workspace, whiteboard and command point." },
-  { id: "trader-1-desk", name: "TRADER 1 WORKSTATION", rect: { x: 34, y: 390, w: 280, h: 170 }, detail: "Strategy terminal, code, chart, budget and XP." },
-  { id: "trader-2-desk", name: "TRADER 2 WORKSTATION", rect: { x: 340, y: 390, w: 270, h: 170 }, detail: "Strategy terminal, code, chart, budget and XP." },
-  { id: "right-studio", name: "RESEARCH STUDIO", rect: { x: 760, y: 390, w: 200, h: 170 }, detail: "A second research surface for notes, books and experiments." },
-];
 
 class Actor {
   sprite: Phaser.GameObjects.Image;
@@ -172,9 +162,6 @@ export class OfficeScene extends Phaser.Scene {
   alarm!: Phaser.GameObjects.Graphics;
   alarmText?: Phaser.GameObjects.Text;
   cover!: Phaser.GameObjects.Image;
-  facilityHighlight?: Phaser.GameObjects.Graphics;
-  facilityCard?: Phaser.GameObjects.Container;
-  selectedFacility?: Facility;
   nameOf: (id: string) => string = (id) => id;
   ready!: Promise<void>;
   private resolveReady!: () => void;
@@ -193,7 +180,6 @@ export class OfficeScene extends Phaser.Scene {
   create() {
     makeTextures(this);
     this.drawRoom();
-    this.installFacilityInteractions();
     this.time.addEvent({ delay: 160, loop: true, callback: () => Object.values(this.actors).forEach((a) => a?.step()) });
     this.time.addEvent({ delay: 400, loop: true, callback: () => { this.tick++; Object.values(this.actors).forEach((a) => a?.tickDots(this.tick)); this.drawCode(); } });
     this.time.addEvent({ delay: 30_000, loop: true, callback: () => this.paintSky() });
@@ -206,80 +192,6 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   drawRoom() {
-    this.draw2p5dEnvironment();
-  }
-
-  // The cover is treated as a visual atlas: each architectural region becomes
-  // its own depth-sorted scene object. The full image is never used as the room.
-  draw2p5dEnvironment() {
-    const floor = this.add.graphics().setDepth(-120);
-    floor.fillStyle(0x8c5d3f).fillRect(0, 250, W, H - 250);
-    for (let y = 270; y < H; y += 22) {
-      floor.lineStyle(2, y % 44 ? 0x6a4633 : 0xb47b4b, 0.8).lineBetween(0, y, W, y);
-      for (let x = (y % 66) - 66; x < W; x += 150) floor.lineStyle(2, 0x6a4633, 0.45).lineBetween(x, y, x + 64, y + 22);
-    }
-    const wall = this.add.graphics().setDepth(-115);
-    wall.fillStyle(0x182b3c).fillRect(0, 0, W, 270);
-    wall.fillStyle(0x2c4050).fillRect(0, 228, W, 42);
-    wall.fillStyle(0x0c1926).fillRect(0, 264, W, 8);
-
-    // Cropped regions of the cover are individual planes, giving the room its
-    // 2.5D composition while keeping every facility addressable.
-    this.coverRegion("window-wall", { x: 0, y: 0, w: 430, h: 730 }, { x: 0, y: 0, w: 252, h: 440 }, -110);
-    this.coverRegion("data-wall", { x: 520, y: 205, w: 850, h: 420 }, { x: 265, y: 62, w: 505, h: 250 }, -100);
-    this.coverRegion("manager-studio", { x: 1320, y: 0, w: 352, h: 760 }, { x: 755, y: 0, w: 205, h: 448 }, -80);
-    this.coverRegion("commons-table", { x: 570, y: 510, w: 800, h: 300 }, { x: 285, y: 330, w: 455, h: 170 }, 300);
-    this.coverRegion("left-workstation", { x: 0, y: 535, w: 560, h: 250 }, { x: 0, y: 390, w: 330, h: 155 }, 500);
-    this.coverRegion("right-studio", { x: 1320, y: 540, w: 352, h: 260 }, { x: 755, y: 385, w: 205, h: 160 }, 520);
-
-    const architecture = this.add.graphics().setDepth(-70);
-    architecture.lineStyle(4, 0x0a1722, 0.95).lineBetween(0, 252, W, 252);
-    for (const x of [315, 455, 595]) {
-      architecture.lineStyle(2, 0x0b1722, 0.95).lineBetween(x, 0, x, 26);
-      architecture.fillStyle(0xf4ae55, 0.95).fillRoundedRect(x - 8, 24, 16, 18, 3);
-      architecture.fillStyle(0xffd27a, 0.13).fillCircle(x, 50, 34);
-    }
-    architecture.lineStyle(3, 0x0a1722, 0.9).lineBetween(0, 274, 252, 274);
-    architecture.lineBetween(252, 274, 770, 274);
-
-    // Live data is deliberately overlaid on the data-wall plane, not baked into it.
-    this.screenText = this.add.text(318, 128, "", TXT(12, "#b4f5e5", { lineSpacing: 3 })).setDepth(610);
-    this.add.text(318, 105, "COLLECTIVE BOARD", TXT(12, "#54e1db")).setDepth(610);
-    this.whiteboard = this.add.text(785, 95, "", TXT(10, "#e6f3ef", { wordWrap: { width: 150, useAdvancedWrap: true }, lineSpacing: 1, maxLines: 6 })).setDepth(610);
-    this.add.text(785, 76, "MANAGER SAYS", TXT(10, "#f4ae55")).setDepth(610);
-    this.clock = this.add.text(910, 28, "", TXT(15, "#f4ae55")).setOrigin(0.5).setDepth(610);
-    this.addDeskOverlays(TRADER_PLACES[0]);
-    this.addDeskOverlays(TRADER_PLACES[1]);
-    this.addDeskOverlays(MANAGER_PLACE);
-    this.add.text(505, 514, "COMMONS", TXT(10, "#f4ae55")).setOrigin(0.5).setDepth(620);
-    this.sky = this.add.graphics().setDepth(-105).setVisible(false);
-    this.night = this.add.graphics().setDepth(9_000);
-    this.alarm = this.add.graphics().setDepth(9_002);
-    this.paintSky();
-  }
-
-  coverRegion(name: string, crop: { x: number; y: number; w: number; h: number }, dest: { x: number; y: number; w: number; h: number }, depth: number) {
-    const image = this.add.image(dest.x + dest.w / 2, dest.y + dest.h / 2, "office-cover")
-      .setCrop(crop.x, crop.y, crop.w, crop.h).setDisplaySize(dest.w, dest.h).setDepth(depth);
-    image.setName(name);
-    return image;
-  }
-
-  addDeskOverlays(p: Place) {
-    const { x, y } = p.desk;
-    const g = this.add.graphics().setDepth(y + 8);
-    g.fillStyle(0x061923, 0.86).fillRoundedRect(x - 66, y - 52, 52, 28, 3);
-    g.fillStyle(0x071a20, 0.86).fillRoundedRect(x + 14, y - 52, 52, 28, 3);
-    g.lineStyle(1, 0x54e1db, 0.8).strokeRoundedRect(x - 66, y - 52, 52, 28, 3).strokeRoundedRect(x + 14, y - 52, 52, 28, 3);
-    const code = this.add.graphics().setDepth(y + 9);
-    const chart = this.add.graphics().setDepth(y + 9);
-    const price = this.add.text(x + 40, y - 60, "", TXT(8, "#7ee2a1")).setOrigin(0.5).setDepth(y + 10);
-    if (p !== MANAGER_PLACE) this.screens.push({ chart, code, price, place: p });
-    this.plates[p.plate] = this.add.text(x, y + 4, p.plate, TXT(9, "#d7fff5", { backgroundColor: "#173846", padding: { x: 5, y: 2 } })).setOrigin(0.5, 1).setDepth(y + 12);
-    this.bars[p.plate] = this.add.graphics().setDepth(y + 12);
-  }
-
-  drawRoomLegacy() {
     // The cover is the room's visual north star: the event stream animates on top
     // of this shared research space instead of rendering a separate map language.
     this.cover = this.add.image(W / 2, H / 2, "office-cover").setDisplaySize(W, H).setDepth(-100);
@@ -358,48 +270,6 @@ export class OfficeScene extends Phaser.Scene {
     this.night = this.add.graphics().setDepth(9_000);
     this.alarm = this.add.graphics().setDepth(9_002);
     this.paintSky();
-  }
-
-  installFacilityInteractions() {
-    this.facilityHighlight = this.add.graphics().setDepth(8_900);
-    for (const facility of FACILITIES) {
-      const { x, y, w, h } = facility.rect;
-      this.add.zone(x + w / 2, y + h / 2, w, h)
-        .setSize(w, h).setInteractive({ useHandCursor: true })
-        .on("pointerover", () => this.highlightFacility(facility, 0.10))
-        .on("pointerout", () => this.highlightFacility(this.selectedFacility, 0.16))
-        .on("pointerdown", () => this.selectFacility(facility));
-    }
-  }
-
-  highlightFacility(facility?: Facility, alpha = 0.16) {
-    this.facilityHighlight?.clear();
-    if (!facility) return;
-    const { x, y, w, h } = facility.rect;
-    this.facilityHighlight?.lineStyle(2, 0x54e1db, 0.9).strokeRoundedRect(x, y, w, h, 8);
-    this.facilityHighlight?.fillStyle(0x54e1db, alpha).fillRoundedRect(x, y, w, h, 8);
-  }
-
-  facilityOccupants(id: string): string {
-    if (id === "trader-1-desk") return this.occupant["trader-1"] ? this.nameOf(this.occupant["trader-1"]) : "vacant";
-    if (id === "trader-2-desk") return this.occupant["trader-2"] ? this.nameOf(this.occupant["trader-2"]) : "vacant";
-    if (id === "manager-office") return this.occupant.manager ? this.nameOf(this.occupant.manager) : "vacant";
-    if (id === "commons") return this.meeting ? `${Object.values(this.actors).filter((a) => a?.meetingSeat).length} in meeting` : "available";
-    return "shared facility";
-  }
-
-  selectFacility(facility: Facility) {
-    this.selectedFacility = facility;
-    this.highlightFacility(facility);
-    this.facilityCard?.destroy();
-    const { x, y, w } = facility.rect;
-    const cardW = 280, cardH = 76, left = Math.min(W - cardW - 12, Math.max(12, x + w / 2 - cardW / 2));
-    const bg = this.add.graphics().fillStyle(0x102b38, 0.96).fillRoundedRect(0, 0, cardW, cardH, 8)
-      .lineStyle(2, 0x54e1db, 0.85).strokeRoundedRect(0, 0, cardW, cardH, 8);
-    const title = this.add.text(12, 9, facility.name, TXT(11, "#f4ae55", { fontStyle: "bold" }));
-    const status = this.add.text(12, 28, `occupant: ${this.facilityOccupants(facility.id)}`, TXT(10, "#d7fff5"));
-    const detail = this.add.text(12, 47, facility.detail, TXT(9, "#91c2bf", { wordWrap: { width: cardW - 24 } }));
-    this.facilityCard = this.add.container(left, Math.max(12, y - cardH - 8), [bg, title, status, detail]).setDepth(9_100);
   }
 
   workplace(p: Place) {
