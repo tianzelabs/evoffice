@@ -18,6 +18,8 @@
 // rugs and the floor are drawn in code (pixels.ts and below): the packs have none.
 import * as Phaser from "phaser";
 import { makeTextures, SCALE } from "./pixels";
+import { RoomRenderer } from "./room-renderer";
+import type { FacilitySpec } from "./room-layout";
 import type { OfficeEvent } from "./net";
 
 export const W = 960, H = 600;
@@ -30,7 +32,7 @@ const TXT = (size: number, color: string, extra: object = {}) =>
 
 // A workplace: where the desk is (centre x, front edge y), where its owner sits,
 // and where a visitor stands to talk to them face to face.
-type Place = { desk: Pt; seat: Pt; visit: Pt; plate: string };
+export type Place = { desk: Pt; seat: Pt; visit: Pt; plate: string };
 const placeAt = (x: number, y: number, plate: string): Place =>
   ({ desk: { x, y }, seat: { x, y: y - 22 }, visit: { x: x + 128, y: y - 4 }, plate });
 const TRADER_PLACES: Place[] = [placeAt(210, 482, "TRADER 1"), placeAt(474, 456, "TRADER 2")];
@@ -162,6 +164,10 @@ export class OfficeScene extends Phaser.Scene {
   alarm!: Phaser.GameObjects.Graphics;
   alarmText?: Phaser.GameObjects.Text;
   cover!: Phaser.GameObjects.Image;
+  roomRenderer?: RoomRenderer;
+  facilityHighlight?: Phaser.GameObjects.Graphics;
+  facilityCard?: Phaser.GameObjects.Container;
+  selectedFacility?: FacilitySpec;
   nameOf: (id: string) => string = (id) => id;
   ready!: Promise<void>;
   private resolveReady!: () => void;
@@ -192,6 +198,26 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   drawRoom() {
+    this.roomRenderer = new RoomRenderer(this);
+    const refs = this.roomRenderer.draw(TRADER_PLACES, MANAGER_PLACE);
+    this.screenText = refs.screenText;
+    this.whiteboard = refs.whiteboard;
+    this.clock = refs.clock;
+    this.night = refs.night;
+    this.alarm = refs.alarm;
+    this.lamps = refs.lamps;
+    this.screens = refs.screens;
+    this.plates = refs.plates;
+    this.bars = refs.bars;
+    this.facilityHighlight = this.add.graphics().setDepth(8_900);
+    this.roomRenderer.installInteractions(
+      (facility) => this.selectFacility(facility),
+      (facility, alpha) => this.highlightFacility(facility, alpha),
+    );
+    return;
+  }
+
+  drawRoomLegacy() {
     // The cover is the room's visual north star: the event stream animates on top
     // of this shared research space instead of rendering a separate map language.
     this.cover = this.add.image(W / 2, H / 2, "office-cover").setDisplaySize(W, H).setDepth(-100);
@@ -270,6 +296,37 @@ export class OfficeScene extends Phaser.Scene {
     this.night = this.add.graphics().setDepth(9_000);
     this.alarm = this.add.graphics().setDepth(9_002);
     this.paintSky();
+  }
+
+  facilityOccupants(id: string): string {
+    if (id === "trader-1") return this.occupant["trader-1"] ? this.nameOf(this.occupant["trader-1"]) : "vacant";
+    if (id === "trader-2") return this.occupant["trader-2"] ? this.nameOf(this.occupant["trader-2"]) : "vacant";
+    if (id === "manager-office") return this.occupant.manager ? this.nameOf(this.occupant.manager) : "vacant";
+    if (id === "commons") return this.meeting ? `${Object.values(this.actors).filter((a) => a?.meetingSeat).length} in meeting` : "available";
+    return "shared facility";
+  }
+
+  highlightFacility(facility?: FacilitySpec, alpha = 0.14) {
+    this.facilityHighlight?.clear();
+    if (!facility || !alpha) return;
+    const { x, y, w, h } = facility.rect;
+    this.facilityHighlight?.fillStyle(0x54e1db, alpha).fillRoundedRect(x, y, w, h, 8);
+    this.facilityHighlight?.lineStyle(2, 0x54e1db, 0.9).strokeRoundedRect(x, y, w, h, 8);
+  }
+
+  selectFacility(facility: FacilitySpec) {
+    this.selectedFacility = facility;
+    this.highlightFacility(facility, 0.18);
+    this.facilityCard?.destroy();
+    const cardW = 285, cardH = 78;
+    const left = Math.min(W - cardW - 12, Math.max(12, facility.rect.x + facility.rect.w / 2 - cardW / 2));
+    const top = Math.max(12, facility.rect.y - cardH - 10);
+    const bg = this.add.graphics().fillStyle(0x102b38, 0.97).fillRoundedRect(0, 0, cardW, cardH, 8)
+      .lineStyle(2, 0x54e1db, 0.9).strokeRoundedRect(0, 0, cardW, cardH, 8);
+    const title = this.add.text(12, 8, facility.name, { resolution: 3, fontFamily: "monospace", fontSize: "11px", color: "#f4ae55", fontStyle: "bold" });
+    const status = this.add.text(12, 27, `occupant: ${this.facilityOccupants(facility.id)}`, { resolution: 3, fontFamily: "monospace", fontSize: "10px", color: "#d7fff5" });
+    const detail = this.add.text(12, 47, facility.detail, { resolution: 3, fontFamily: "monospace", fontSize: "9px", color: "#91c2bf", wordWrap: { width: cardW - 24 } });
+    this.facilityCard = this.add.container(left, top, [bg, title, status, detail]).setDepth(9_100);
   }
 
   workplace(p: Place) {
