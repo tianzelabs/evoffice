@@ -37,6 +37,11 @@ hypothesis, and transfer across analytics tasks and data regimes.
 The market sandbox is one task family, not the only benchmark. A market outcome
 alone cannot establish an RLM effect.
 
+The RLM-to-SLM compilation experiment is the implementation-focused sub-case:
+[RLM → SLM: compiling recursive analytics behaviour](case-rlm-to-slm.md).
+It tests whether the repeated REPL layer can be internalised by a small local
+model without confusing that optimisation with replacing recursive planning.
+
 ## Matched comparison
 
 Compare RLM and flat-context agents under the same model family, prompt family,

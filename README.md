@@ -23,6 +23,7 @@ The two research cases are intentionally separate:
 
 - [Case A — AI community evolution](docs/case-ai-community.md)
 - [Case B — RLM for analytics](docs/case-rlm-analytics.md)
+  - [RLM → SLM behaviour compilation](docs/case-rlm-to-slm.md)
 
 Gamification is the shared method layer, not a third blended hypothesis:
 [gamification protocol](docs/gamification-protocol.md).
